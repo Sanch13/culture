@@ -1,0 +1,81 @@
+# Python-generated files
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+wheels/
+*.egg-info
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# projects files
+logs
+fixtures
+media
+static
+nginx
+
+# pyenv
+.python-version
+
+# Private keys and certificates
+*.pem
+
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Translations
+*.mo
+*.pot
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.vs/
+
+# Cursor specific files
+.cursorrules
+.cursorignore
+
+# Ruff
+.ruff_cache/
+
+# C extensions
+*.so
