@@ -12,7 +12,9 @@ SERVICE_NAME = fastapi_app
 app-logs:
 	@${DC} -f ${LOCAL_FILE} up --build
 
-
+.PHONY: app-logs-down
+app-logs-down:
+	@${DC} -f ${LOCAL_FILE} down
 # .PHONY: app-local-down
 # app-local-down:
 # 	@${DC} -f ${APP_FILE_LOCAL} down
