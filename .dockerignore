@@ -1,0 +1,72 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+.python-version
+
+# Virtual Environment
+*.env
+.venv
+../.venv
+venv
+env
+ENV
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Media
+media/
+nginx
+# Static
+static/
+
+# Private keys and certificates
+*.pem
+
+# Git
+.git
+.gitignore
+
+# IDE / Editor
+*.swp
+*.swo
+*.bak
+*.tmp
+*.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+pytest.json
+coverage.xml
+htmlcov/
+*.sqlite3
+*.md
+.run
+.python-version
+
+# Docker
+*.yml
+*.yaml
+Dockerfile
+Dockerfile-Local
+.dockerignore
+Makefile
+
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn.lock
+package-lock.json
+
+# OS Generated Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

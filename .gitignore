@@ -21,7 +21,6 @@ logs
 fixtures
 media
 static
-nginx
 
 # pyenv
 .python-version

@@ -1,0 +1,34 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+    -   id: check-yaml
+    -   id: check-json
+    -   id: check-toml
+    -   id: end-of-file-fixer
+        exclude: ^backend/migrations/versions/
+    -   id: trailing-whitespace
+        exclude: ^backend/migrations/versions/
+    -   id: check-merge-conflict
+    -   id: check-case-conflict
+    -   id: check-added-large-files
+        args: ['--maxkb=1024']
+    -   id: debug-statements
+    -   id: detect-private-key
+
+# Ruff для форматирования и линтинга
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.0
+    hooks:
+    -   id: ruff
+        args: [--fix, --exit-non-zero-on-fix]  # автоматически исправляет проблемы и прерывает коммит, если были исправления
+        exclude: ^backend/migrations/versions
+    -   id: ruff-format
+        exclude: ^backend/migrations/versions
+
+# Проверка наличия секретов
+-   repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+    -   id: detect-secrets
+        exclude: package.lock.json|poetry.lock|uv.lock|^backend/migrations/versions

@@ -1,0 +1,26 @@
+[project]
+name = "culture"
+version = "0.1.0"
+description = "Add your description here"
+#readme = "README.md"
+requires-python = "==3.13.*"
+dependencies = [
+    "celery==5.5.3",
+    "django==5.2.8",
+    "django-celery-beat==2.8.1",
+    "gunicorn==23.0.0",
+    "psycopg2-binary==2.9.11",
+    "pydantic-settings==2.12.0",
+    "python-dotenv==1.2.1",
+    "redis==5.2.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Явно указываем, какие папки брать из src
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/config",
+]
