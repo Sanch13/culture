@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Кабинет администратора</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background-color: #f4f6f9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #007bff;
+        }
+
+        .card h3 {
+            margin-top: 0;
+        }
+
+        .card p {
+            color: #666;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .btn-preview {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        .btn-edit {
+            background-color: #ffc107;
+            color: #333;
+            margin-left: 10px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🛠 Кабинет Администратора</h1>
+        <div>
+            <span>{{ user.username }}</span> | <a href="/admin/">В админку Django</a>
+        </div>
+    </div>
+
+    <h2>Ваши шаблоны чек-листов</h2>
+    <div class="grid">
+        {% for template in templates %}
+        <div class="card">
+            <h3>{{ template.name }}</h3>
+            <p>📍 Участок: {{ template.location.name }}</p>
+            <div style="margin-top: 15px;">
+                <a href="{% url 'template_preview' template.id %}" class="btn btn-preview">👁
+                    Предпросмотр</a>
+                <!-- Ссылка ведет в стандартную админку для редактирования -->
+                <a href="/admin/checklists/checklisttemplate/{{ template.id }}/change/"
+                   class="btn btn-edit">✏️ Редактировать</a>
+            </div>
+        </div>
+        {% empty %}
+        <p>Шаблонов пока нет. Создайте их в админке.</p>
+        {% endfor %}
+    </div>
+</div>
+</body>
+</html>

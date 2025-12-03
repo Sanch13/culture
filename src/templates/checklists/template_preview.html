@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Предпросмотр: {{ template.name }}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #e9ecef;
+            padding: 20px;
+        }
+
+        .paper {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .meta-info {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 20px;
+        }
+
+        .section-title {
+            background-color: #007bff;
+            color: white;
+            padding: 10px;
+            margin-top: 30px;
+            font-size: 1.2em;
+        }
+
+        .criteria-row {
+            display: flex;
+            border-bottom: 1px solid #eee;
+            padding: 15px 0;
+            align-items: flex-start;
+        }
+
+        .criteria-text {
+            flex: 3;
+            padding-right: 20px;
+        }
+
+        .criteria-actions {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toggle-switch {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-check {
+            padding: 8px 15px;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            cursor: not-allowed;
+        }
+
+        .btn-check.active {
+            background-color: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+
+        .btn-check.danger {
+            background-color: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+
+        .comment-box {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        .preview-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #ffc107;
+            color: #000;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+<div class="preview-banner">
+    ⚠️ ЭТО РЕЖИМ ПРЕДПРОСМОТРА. Данные не сохраняются.
+    <a href="{% url 'admin_cabinet' %}">Вернуться назад</a>
+</div>
+
+<div class="paper" style="margin-top: 30px;">
+    <h1>{{ template.name }}</h1>
+    <div class="meta-info">
+        Участок: <strong>{{ template.location.name }}</strong><br>
+        Дата: <strong>{% now "d.m.Y" %}</strong> (Сегодня)
+    </div>
+
+    <form>
+        {% for section in sections %}
+        <div class="section-title">
+            {{ section.title }}
+        </div>
+
+        {% for item in section.criteria.all %}
+        <div class="criteria-row">
+            <!-- Колонка 1: Вопрос -->
+            <div class="criteria-text">
+                <strong>{{ item.order }}.</strong> {{ item.text }}
+            </div>
+
+            <!-- Колонка 2: Действия (Имитация) -->
+            <div class="criteria-actions">
+                <!-- Кнопки Да/Нет -->
+                <div class="toggle-switch">
+                    <button type="button" class="btn-check active">Соответствует</button>
+                    <button type="button" class="btn-check">Не соответствует</button>
+                </div>
+
+                <!-- Поле ввода комментария -->
+                <textarea class="comment-box" placeholder="Комментарий (если есть нарушение)..."
+                          rows="2" disabled></textarea>
+
+                <!-- Кнопка фото (фейковая) -->
+                <div style="font-size: 0.9em; color: #007bff; cursor: pointer;">
+                    📷 Прикрепить фото (0)
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <p style="padding: 20px; color: #999;">В этом разделе нет вопросов.</p>
+        {% endfor %}
+
+        {% endfor %}
+
+        <div style="margin-top: 40px; text-align: center;">
+            <button type="button"
+                    style="padding: 15px 30px; font-size: 1.2em; background: grey; color: white; border: none; cursor: not-allowed;">
+                Отправить отчет (Неактивно в Preview)
+            </button>
+        </div>
+    </form>
+</div>
+
+</body>
+</html>

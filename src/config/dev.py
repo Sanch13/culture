@@ -18,6 +18,7 @@ INSTALLED_APPS = [
 
 INSTALLED_APPS += [
     "django_celery_beat",
+    "checklists",
 ]
 
 

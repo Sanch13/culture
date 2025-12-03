@@ -9,6 +9,7 @@ dependencies = [
     "django==5.2.8",
     "django-celery-beat==2.8.1",
     "gunicorn==23.0.0",
+    "pillow==11.3.0",
     "psycopg2-binary==2.9.11",
     "pydantic-settings==2.12.0",
     "python-dotenv==1.2.1",
