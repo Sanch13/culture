@@ -1,0 +1,44 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Дашборд{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">👋 Добро пожаловать, {{ user.username }}!</h1>
+
+<!-- Карточки статистики (Заглушки) -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-header">Всего шаблонов</div>
+            <div class="card-body">
+                <h2 class="card-title">{{ total_templates }}</h2>
+                <p class="card-text">Активных форм проверки</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-header">Проверок сегодня</div>
+            <div class="card-body">
+                <h2 class="card-title">0</h2> <!-- Потом подключим реальные данные -->
+                <p class="card-text">Отчетов получено</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-white bg-danger mb-3">
+            <div class="card-header">Нарушений</div>
+            <div class="card-body">
+                <h2 class="card-title">0</h2>
+                <p class="card-text">За последние 24 часа</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    В этом разделе скоро появятся графики и детальная аналитика по цехам.
+</div>
+{% endblock %}
