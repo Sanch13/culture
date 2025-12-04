@@ -13,7 +13,7 @@ class Location(models.Model):
     Производственный участок (например, 'Цех розлива').
     """
 
-    name = models.CharField("Название участка", max_length=200)
+    name = models.CharField("Название участка", max_length=300)
 
     def __str__(self):
         return self.name
@@ -28,7 +28,7 @@ class ChecklistTemplate(models.Model):
     Шаблон чек-листа (например, 'Ежедневная проверка ЭМО').
     """
 
-    name = models.CharField("Название шаблона", max_length=200)
+    name = models.CharField("Название шаблона", max_length=300)
     location = models.ForeignKey(
         Location,
         on_delete=models.CASCADE,
@@ -55,7 +55,7 @@ class ChecklistSection(models.Model):
         related_name="sections",
         verbose_name="Шаблон",
     )
-    title = models.CharField("Заголовок раздела", max_length=200)
+    title = models.CharField("Заголовок раздела", max_length=300)
     order = models.PositiveIntegerField("Порядок сортировки", default=0)
 
     def __str__(self):
@@ -78,7 +78,7 @@ class ChecklistCriteria(models.Model):
         related_name="criteria",
         verbose_name="Раздел",
     )
-    text = models.CharField("Текст вопроса", max_length=500)
+    text = models.CharField("Текст вопроса", max_length=1000)
     order = models.PositiveIntegerField("Порядок сортировки", default=0)
 
     def __str__(self):
@@ -112,7 +112,7 @@ class Inspection(models.Model):
     created_at = models.DateTimeField("Дата создания записи", auto_now_add=True)
 
     # Snapshot: фиксируем название участка текстом на момент проверки
-    location_snapshot = models.CharField("Участок (архив)", max_length=200)
+    location_snapshot = models.CharField("Участок (архив)", max_length=300)
 
     # Статус отчета (опционально, на будущее)
     is_completed = models.BooleanField("Проверка завершена", default=False)
@@ -146,8 +146,8 @@ class InspectionItem(models.Model):
     )
 
     # --- SNAPSHOT FIELDS (Копии данных) ---
-    section_name = models.CharField("Раздел (архив)", max_length=200)
-    criteria_text = models.CharField("Вопрос (архив)", max_length=500)
+    section_name = models.CharField("Раздел (архив)", max_length=300)
+    criteria_text = models.CharField("Вопрос (архив)", max_length=1000)
     criteria_order = models.PositiveIntegerField("Порядок (архив)", default=0)
 
     # --- РЕЗУЛЬТАТЫ ---

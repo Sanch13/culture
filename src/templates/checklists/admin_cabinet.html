@@ -1,101 +1,45 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Кабинет администратора</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            padding: 20px;
-            background-color: #f4f6f9;
-        }
+{% extends 'base_admin.html' %}
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+{% block title %}Кабинет{% endblock %}
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🛠 Управление шаблонами</h1>
+    <a href="/admin/checklists/checklisttemplate/add/" class="btn btn-success">
+        + Создать новый шаблон
+    </a>
+</div>
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            border-top: 4px solid #007bff;
-        }
-
-        .card h3 {
-            margin-top: 0;
-        }
-
-        .card p {
-            color: #666;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .btn-preview {
-            background-color: #17a2b8;
-            color: white;
-        }
-
-        .btn-edit {
-            background-color: #ffc107;
-            color: #333;
-            margin-left: 10px;
-        }
-
-        .btn:hover {
-            opacity: 0.9;
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        <h1>🛠 Кабинет Администратора</h1>
-        <div>
-            <span>{{ user.username }}</span> | <a href="/admin/">В админку Django</a>
-        </div>
-    </div>
-
-    <h2>Ваши шаблоны чек-листов</h2>
-    <div class="grid">
-        {% for template in templates %}
-        <div class="card">
-            <h3>{{ template.name }}</h3>
-            <p>📍 Участок: {{ template.location.name }}</p>
-            <div style="margin-top: 15px;">
-                <a href="{% url 'template_preview' template.id %}" class="btn btn-preview">👁
-                    Предпросмотр</a>
-                <!-- Ссылка ведет в стандартную админку для редактирования -->
-                <a href="/admin/checklists/checklisttemplate/{{ template.id }}/change/"
-                   class="btn btn-edit">✏️ Редактировать</a>
+<!-- Сетка карточек -->
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for template in templates %}
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-header bg-white fw-bold">
+                    {{ template.location.name }}
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ template.name }}</h5>
+                    <p class="card-text text-muted">
+                        Разделов: {{ template.sections.count }}
+                    </p>
+                </div>
+                <div class="card-footer bg-white border-top-0 d-flex justify-content-between">
+                    <a href="{% url 'template_preview' template.id %}" class="btn btn-outline-primary btn-sm">
+                        👁 Предпросмотр
+                    </a>
+                    <a href="/admin/checklists/checklisttemplate/{{ template.id }}/change/" class="btn btn-outline-secondary btn-sm">
+                        ✏️ Изменить
+                    </a>
+                </div>
             </div>
         </div>
-        {% empty %}
-        <p>Шаблонов пока нет. Создайте их в админке.</p>
-        {% endfor %}
-    </div>
+    {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                Шаблонов пока нет. Создайте первый шаблон в админке.
+            </div>
+        </div>
+    {% endfor %}
 </div>
-</body>
-</html>
+{% endblock %}

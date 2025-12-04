@@ -23,7 +23,7 @@ class ChecklistCriteriaInline(admin.TabularInline):
 
     formfield_overrides = {
         models.CharField: {
-            "widget": Textarea(attrs={"rows": 3, "cols": 80, "style": "width: 90%;"})
+            "widget": Textarea(attrs={"rows": 5, "cols": 80, "style": "width: 90%;"})
         },
     }
 
