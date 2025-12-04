@@ -6,76 +6,106 @@
     <title>{% block title %}Админка{% endblock %} | Система Чек-листов</title>
 
     <!-- Подключаем Bootstrap 5 (CSS) для красоты и сетки -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+          rel="stylesheet">
 
     <style>
         /* Отступ сверху, чтобы контент не заезжал под фиксированное меню */
-        body { padding-top: 70px; background-color: #f8f9fa; }
-        .card { box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: none; }
+        body {
+            padding-top: 70px;
+            background-color: #f8f9fa;
+        }
+
+        .card {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: none;
+        }
 
         /* Дополнительные стили, если понадобятся */
-        {% block extra_css %}{% endblock %}
+        {
+        %
+        block
+        extra_css
+        %
+        }
+        {
+        %
+        endblock
+        %
+        }
     </style>
 </head>
 <body>
 
-    <!-- ВЕРХНЕЕ МЕНЮ (NAVBAR) -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'admin_cabinet' %}">🏭 CheckSystem <span class="badge bg-secondary">Admin</span></a>
+<!-- ВЕРХНЕЕ МЕНЮ (NAVBAR) -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'admin_dashboard' %}">🏭 CheckSystem <span
+                class="badge bg-secondary">Admin</span></a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <!-- Ссылка на Дашборд -->
-                    <li class="navbar-nav-item">
-                        <a class="nav-link active" href="{% url 'admin_cabinet' %}">Дашборд</a>
-                    </li>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <!-- Ссылка на Дашборд -->
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}"
+                       href="{% url 'admin_dashboard' %}">
+                        📊 Дашборд
+                    </a>
+                </li>
 
-                    <!-- Заглушки для будущих разделов -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">Сотрудники</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">Аналитика</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/">Django-Админка</a>
-                    </li>
-                </ul>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'admin_templates' %}active{% endif %}"
+                       href="{% url 'admin_templates' %}">
+                        📋 Шаблоны
+                    </a>
+                </li>
 
-                <!-- Правая часть меню (Пользователь) -->
-                <span class="navbar-text text-white">
+                <!-- Заглушки для будущих разделов -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Сотрудники</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Аналитика</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/">Django-Админка</a>
+                </li>
+            </ul>
+
+            <!-- Правая часть меню (Пользователь) -->
+            <span class="navbar-text text-white">
                     👤 {{ user.username }}
                 </span>
-            </div>
         </div>
-    </nav>
-
-    <!-- ОСНОВНОЙ КОНТЕНТ -->
-    <div class="container mt-4">
-
-        <!-- Сюда вставляются сообщения (Alerts), если они есть -->
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }}">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
-
-        <!-- Дырка для контента -->
-        {% block content %}
-        {% endblock %}
-
     </div>
+</nav>
 
-    <!-- Подключаем Bootstrap JS (для выпадающих меню и мобильной версии) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- ОСНОВНОЙ КОНТЕНТ -->
+<div class="container mt-4">
 
-    {% block extra_js %}{% endblock %}
+    <!-- Сюда вставляются сообщения (Alerts), если они есть -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Дырка для контента -->
+    {% block content %}
+    {% endblock %}
+
+</div>
+
+<!-- Подключаем Bootstrap JS (для выпадающих меню и мобильной версии) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>

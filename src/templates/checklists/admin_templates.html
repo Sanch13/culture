@@ -1,0 +1,46 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Шаблоны{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Библиотека шаблонов</h1>
+    <a href="/admin/checklists/checklisttemplate/add/" class="btn btn-success">
+        + Создать новый
+    </a>
+</div>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for template in templates %}
+    <div class="col">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-white fw-bold border-bottom-0">
+                🏢 {{ template.location.name }}
+            </div>
+            <div class="card-body pt-0">
+                <h5 class="card-title text-primary">{{ template.name }}</h5>
+                <p class="card-text text-muted small">
+                    Разделов: {{ template.sections.count }}
+                </p>
+            </div>
+            <div class="card-footer bg-light d-flex justify-content-between">
+                <a href="{% url 'template_preview' template.id %}"
+                   class="btn btn-sm btn-outline-primary">
+                    👁 Просмотр
+                </a>
+                <a href="/admin/checklists/checklisttemplate/{{ template.id }}/change/"
+                   class="btn btn-sm btn-outline-secondary">
+                    ✏️ Ред.
+                </a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-warning">
+            Список шаблонов пуст.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

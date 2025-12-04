@@ -3,18 +3,32 @@ from django.contrib.admin.views.decorators import staff_member_required
 from checklists.models import ChecklistTemplate
 
 
-# Декоратор проверяет, что пользователь имеет статус "Staff" (Администратор)
 @staff_member_required
-def admin_cabinet(request):
+def admin_dashboard(request):
     """
-    Кабинет администратора.
-    Здесь выводится список шаблонов с кнопками управления (Редактировать, Предпросмотр).
-    В будущем сюда добавим аналитику и графики.
+    Главная страница (Дашборд).
+    Сюда мы позже выведем графики и цифры.
+    """
+    # Пока просто считаем общее количество, чтобы было не пусто
+    total_templates = ChecklistTemplate.objects.count()
+    # total_inspections = Inspection.objects.count() # Раскомментируем, когда будут проверки
+
+    context = {
+        "total_templates": total_templates,
+        # 'total_inspections': total_inspections
+    }
+    return render(request, "checklists/admin_dashboard.html", context)
+
+
+@staff_member_required
+def admin_templates(request):
+    """
+    Отдельная страница: Библиотека шаблонов.
     """
     templates = ChecklistTemplate.objects.all().select_related("location")
 
     context = {"templates": templates}
-    return render(request, "checklists/admin_cabinet.html", context)
+    return render(request, "checklists/admin_templates.html", context)
 
 
 @staff_member_required
