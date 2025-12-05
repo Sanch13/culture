@@ -27,4 +27,10 @@ WORKDIR /app
 # Копируем готовое виртуальное окружение из стадии "Строителя"
 COPY --from=builder /app /app
 
+RUN groupadd -g 1000 sanch && \
+    useradd -u 1000 -g 1000 -m sanch && \
+    chown -R sanch:sanch /app
+
+USER sanch
+
 ENV PATH="/app/.venv/bin:$PATH"
