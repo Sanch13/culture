@@ -8,6 +8,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./static:/app/static
+      - ./fixtures:/app/fixtures
       - ./media:/app/media
       - ./manage.py:/app/manage.py
     command: "uv run gunicorn --bind 0.0.0.0:8000 config.wsgi:application"

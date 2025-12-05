@@ -19,8 +19,13 @@ INSTALLED_APPS = [
 INSTALLED_APPS += [
     "django_celery_beat",
     "checklists",
+    "users",
 ]
 
+AUTH_USER_MODEL = "users.User"
+LOGIN_REDIRECT_URL = "index"
+LOGOUT_REDIRECT_URL = "users:login"
+LOGIN_URL = "users:login"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -95,6 +100,16 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = settings.EMAIL_HOST
+EMAIL_PORT = settings.EMAIL_PORT
+EMAIL_USE_SSL = settings.EMAIL_USE_SSL
+EMAIL_USE_TLS = settings.EMAIL_USE_TLS
+EMAIL_HOST_USER = settings.EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD = settings.EMAIL_HOST_PASSWORD.get_secret_value()
+DEFAULT_FROM_EMAIL = settings.DEFAULT_FROM_EMAIL
 
 CELERY_BROKER_URL = settings.CELERY_BROKER_URL
 CELERY_RESULT_BACKEND = settings.CELERY_RESULT_BACKEND

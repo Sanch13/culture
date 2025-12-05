@@ -1,4 +1,5 @@
-from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.admin.views.decorators import staff_member_required
 from checklists.models import ChecklistTemplate
 
@@ -49,3 +50,30 @@ def template_preview(request, template_id):
         "sections": sections,
     }
     return render(request, "checklists/template_preview.html", context)
+
+
+@login_required
+def employee_dashboard(request):
+    """
+    Кабинет обычного сотрудника.
+    Здесь будет список проверок, назначенных ему на сегодня.
+    """
+    context = {
+        # Позже сюда добавим фильтр проверок: Inspection.objects.filter(inspector=request.user)
+    }
+    return render(request, "checklists/employee_dashboard.html", context)
+
+
+@login_required
+def index_dispatcher(request):
+    """
+    Решает, куда перенаправить пользователя после входа.
+    """
+    user = request.user
+
+    # Если это Админ или Мастер -> в Кабинет Админа
+    if user.role in [user.ROLE_ADMIN, user.ROLE_MASTER] or user.is_staff:
+        return redirect("admin_dashboard")
+
+    # Иначе (обычный сотрудник) -> в Кабинет Сотрудника
+    return redirect("employee_dashboard")

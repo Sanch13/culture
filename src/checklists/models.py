@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.conf import settings
 from django.utils import timezone
 
 
@@ -101,7 +101,7 @@ class Inspection(models.Model):
     """
 
     inspector = models.ForeignKey(
-        User, on_delete=models.PROTECT, verbose_name="Проверяющий"
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Проверяющий"
     )
     template = models.ForeignKey(
         ChecklistTemplate,

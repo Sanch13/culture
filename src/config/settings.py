@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: list
     ALLOWED_HOSTS_FOR_DEPLOY: list
 
+    EMAIL_HOST: str
+    EMAIL_PORT: int
+    EMAIL_USE_SSL: bool
+    EMAIL_USE_TLS: bool
+    EMAIL_HOST_USER: str
+    EMAIL_HOST_PASSWORD: SecretStr
+    DEFAULT_FROM_EMAIL: str
+
     POSTGRES_USER: str
     POSTGRES_PASSWORD: SecretStr
     POSTGRES_DB: str

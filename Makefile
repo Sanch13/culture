@@ -5,8 +5,8 @@ LOGS = docker logs
 ENV = --env-file .env
 LOCAL_FILE = docker-compose.local.yml
 STORAGES_FILE = docker_compose/storages.yaml
-APP_CONTAINER = app
-SERVICE_NAME = fastapi_app
+APP_CONTAINER = web
+SERVICE_NAME = web
 
 .PHONY: app-logs
 app-logs:
@@ -15,6 +15,32 @@ app-logs:
 .PHONY: app-logs-down
 app-logs-down:
 	@${DC} -f ${LOCAL_FILE} down
+
+
+# Создать фикстуры
+.PHONY: app-dump # make app-load path="fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json"
+app-dump:
+	@${DC} -f ${LOCAL_FILE} exec ${APP_CONTAINER} sh -c "python manage.py dumpdata checklists --indent 4 --output $(path)"
+
+.PHONY: app-load # make app-load path="fixtures/all_checklists_data.json"
+app-load:
+	@${DC} -f ${LOCAL_FILE} exec ${APP_CONTAINER} sh -c "python manage.py loaddata $(path)"
+
+
+
+# Создать миграции
+.PHONY: migrations # make migrate app="users"
+migrations:
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py makemigrations "$(app)"
+
+# Применить миграции
+.PHONY: migrate
+migrate:
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py migrate
+
+
+
+
 # .PHONY: app-local-down
 # app-local-down:
 # 	@${DC} -f ${APP_FILE_LOCAL} down
@@ -66,15 +92,7 @@ app-logs-down:
 # app-down:
 # 	@${DC} -f ${LOCAL_FILE} down
 #
-# # Создать миграцию
-# .PHONY: migrate # make migrate m="add users table"
-# migrate:
-# 	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} alembic revision --autogenerate -m "$(m)"
-#
-# # Применить миграции
-# .PHONY: migrate-up  # make migrate-up
-# migrate-up:
-# 	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} alembic upgrade head
+
 #
 # # Откатить миграцию
 # .PHONY: migrate-down  # make migrate-down

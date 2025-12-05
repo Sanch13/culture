@@ -2,9 +2,11 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("", views.index_dispatcher, name="index"),
     # Кабинет администратора
     path("cabinet/", views.admin_dashboard, name="admin_dashboard"),
     path("cabinet/templates/", views.admin_templates, name="admin_templates"),
     # Предпросмотр конкретного шаблона
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
+    path("my-checks/", views.employee_dashboard, name="employee_dashboard"),
 ]
