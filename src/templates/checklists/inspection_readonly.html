@@ -1,0 +1,80 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Отчет #{{ inspection.id }}{% endblock %}
+
+{% block content %}
+<div class="container pb-5" style="max-width: 900px;">
+
+    <!-- Шапка отчета -->
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h6 class="text-muted text-uppercase">Отчет о проверке #{{ inspection.id }}</h6>
+            <h2 class="mb-2">{{ inspection.template.name }}</h2>
+            <div class="text-muted">
+                📅 Дата: <strong>{{ inspection.date_check|date:"d.m.Y" }}</strong> <br>
+                📍 Участок: <strong>{{ inspection.location_snapshot }}</strong> <br>
+                👤 Инспектор: <strong>{{ inspection.inspector.first_name }} {{ inspection.inspector.last_name }}</strong>
+            </div>
+        </div>
+        <div>
+            <!-- Кнопка печати (Бонус) -->
+            <button onclick="window.print()" class="btn btn-outline-secondary">🖨 Печать</button>
+            <a href="{% url 'admin_history' %}" class="btn btn-primary ms-2">Назад в журнал</a>
+        </div>
+    </div>
+
+    <!-- Тело отчета -->
+    {% for section_name, items in sections_data.items %}
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-light fw-bold text-dark">
+                {{ section_name }}
+            </div>
+            <div class="card-body p-0">
+                {% for item in items %}
+                    <div class="p-3 border-bottom d-flex gap-3 align-items-start bg-opacity-10 {% if item.is_compliant %}bg-success{% else %}bg-danger{% endif %}">
+
+                        <!-- Статус (Иконка) -->
+                        <div class="flex-shrink-0" style="font-size: 1.5rem;">
+                            {% if item.is_compliant %}
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                            {% else %}
+                                <i class="bi bi-x-circle-fill text-danger"></i>
+                            {% endif %}
+                        </div>
+
+                        <!-- Контент -->
+                        <div class="flex-grow-1">
+                            <div class="fw-medium mb-1">{{ item.criteria_text }}</div>
+
+                            <!-- Если есть комментарий -->
+                            {% if item.comment %}
+                                <div class="alert alert-warning py-1 px-2 d-inline-block mb-1 small">
+                                    💬 {{ item.comment }}
+                                </div>
+                            {% endif %}
+
+                            <!-- Фотографии -->
+                            {% if item.photos.all %}
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    {% for photo in item.photos.all %}
+                                        <a href="{{ photo.image.url }}" target="_blank">
+                                            <img src="{{ photo.image.url }}" class="rounded border bg-white"
+                                                 style="width: 100px; height: 100px; object-fit: cover;">
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+
+    <div class="text-center text-muted mt-5">
+        Документ сформирован автоматически системой CheckSystem.
+    </div>
+
+</div>
+{% endblock %}

@@ -10,6 +10,7 @@ SERVICE_NAME = web
 
 .PHONY: app-logs
 app-logs:
+	@$(MAKE) app-sync
 	@${DC} -f ${LOCAL_FILE} up --build
 
 .PHONY: app-logs-down
@@ -27,7 +28,6 @@ app-load:
 	@${DC} -f ${LOCAL_FILE} exec ${APP_CONTAINER} sh -c "python manage.py loaddata $(path)"
 
 
-
 # Создать миграции
 .PHONY: migrations # make migrate app="users"
 migrations:
@@ -38,21 +38,11 @@ migrations:
 migrate:
 	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py migrate
 
+.PHONY: app-sync
+app-sync:
+	@uv sync
 
 
-
-# .PHONY: app-local-down
-# app-local-down:
-# 	@${DC} -f ${APP_FILE_LOCAL} down
-#
-# .PHONY: app
-# app:
-# 	@${DC} -f ${APP_FILE} up --build -d
-#
-# .PHONY: app-down
-# app-down:
-# 	@${DC} -f ${APP_FILE} down
-#
 # .PHONY: build
 # build:
 # 	@${D} build -t ${IMAGE_NAME} .
@@ -72,33 +62,6 @@ migrate:
 # .PHONY: cash
 # cash:
 # 	@${D} system prune -f
-#
-#
-# .PHONY: app-sync
-# app-sync:  #
-# 	@cd backend && uv sync && cd ..
-#
-# .PHONY: app-logs
-# app-logs:  # запускает приложение с логами в консоли
-# 	@$(MAKE) app-sync
-# 	@${DC} -f ${LOCAL_FILE} up --build
-#
-# .PHONY: app
-# app:  # запускает приложение и применяет все миграции
-# 	@${DC} -f ${LOCAL_FILE} up --build -d
-# 	@$(MAKE) migrate-up
-#
-# .PHONY: app-down
-# app-down:
-# 	@${DC} -f ${LOCAL_FILE} down
-#
-
-#
-# # Откатить миграцию
-# .PHONY: migrate-down  # make migrate-down
-# migrate-down:
-# 	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} alembic downgrade -1
-#
 # .PHONY: test
 # test:  #  Запускает тесты только в папке tests
 # 	@cd backend && uv run pytest tests && cd ..

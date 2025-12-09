@@ -1,0 +1,73 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Журнал проверок{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">🗂 Журнал проверок</h1>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <!-- align-middle центрует текст по вертикали -->
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Дата</th>
+                <th>Участок</th>
+                <th>Шаблон</th>
+                <th>Итог</th> <!-- НОВАЯ КОЛОНКА -->
+                <th style="min-width: 250px;">Проверяющий</th>
+                <th>Действие</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for inspection in inspections %}
+            <!-- Логика цвета строки -->
+            <!-- Если 0 нарушений - зеленый фон, иначе - красный -->
+            <tr class="{% if inspection.violation_count == 0 %}table-success{% else %}table-danger{% endif %}">
+
+                <td>#{{ inspection.id }}</td>
+                <td>{{ inspection.date_check|date:"d.m.Y" }}</td>
+                <td>{{ inspection.location_snapshot }}</td>
+                <td>{{ inspection.template.name }}</td>
+
+                <!-- КОЛОНКА ИТОГ -->
+                <td>
+                    {% if inspection.violation_count == 0 %}
+                    <span class="badge bg-success">
+                        <i class="bi bi-check-lg"></i> Идеально
+                    </span>
+                    {% else %}
+                    <span class="badge bg-danger">
+                        Нарушений: {{ inspection.violation_count }}
+                    </span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <div class="fw-bold text-nowrap">
+                        {{ inspection.inspector.get_full_name }}
+                    </div>
+                    <div class="small text-muted">{{ inspection.inspector.email }}</div>
+                </td>
+
+                <td>
+                    <!-- Кнопку делаем белой/прозрачной, чтобы не сливалась с цветным фоном -->
+                    <a href="{% url 'admin_report_detail' inspection.id %}"
+                       class="btn btn-sm btn-light border shadow-sm">
+                        Открыть
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                    Завершенных проверок пока нет.
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

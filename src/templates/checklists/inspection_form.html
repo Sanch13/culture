@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка: {{ inspection.template.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        /* Делаем переключатели большими и удобными для пальцев */
+        .btn-check-group {
+            display: flex;
+            width: 100%;
+        }
+
+        .btn-check-group input {
+            display: none;
+        }
+
+        /* Скрываем стандартные радиокнопки */
+
+        .btn-check-group label {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* Левая кнопка (Да) */
+        .lbl-yes {
+            border-radius: 5px 0 0 5px;
+            background: #f8f9fa;
+            color: #198754;
+        }
+
+        input[value="true"]:checked + label.lbl-yes {
+            background-color: #198754;
+            color: white;
+            border-color: #198754;
+        }
+
+        /* Правая кнопка (Нет) */
+        .lbl-no {
+            border-radius: 0 5px 5px 0;
+            background: #f8f9fa;
+            color: #dc3545;
+        }
+
+        input[value="false"]:checked + label.lbl-no {
+            background-color: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+
+        .sticky-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            padding: 15px;
+            z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            padding-bottom: 80px;
+        }
+
+        /* Стиль для заблокированных элементов */
+        .disabled-state {
+            opacity: 0.5;           /* Полупрозрачность */
+            pointer-events: none;   /* Запрет кликов */
+            cursor: not-allowed;
+        }
+
+        /* Красная рамка для обязательного комментария, если он пуст */
+        textarea:required {
+            border-left: 4px solid #dc3545;
+        }
+
+        /* Отступ под футер */
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+    <!-- Шапка -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="text-muted mb-0">Чек-лист №{{ inspection.id }}</h5>
+            <h2 class="mb-0">{{ inspection.template.name }}</h2>
+            <p class="text-muted">{{ inspection.location_snapshot }} | {{ inspection.date_check
+                }}</p>
+        </div>
+        <a href="{% url 'employee_dashboard' %}" class="btn btn-outline-secondary">✕ Закрыть</a>
+    </div>
+
+    <!-- Основная форма -->
+    <!-- ВАЖНО: Добавлен enctype -->
+    <form method="post" id="inspectionForm" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% for section_name, items in sections_data.items %}
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-white fw-bold py-3 text-primary border-bottom-0">
+                {{ section_name }}
+            </div>
+            <div class="card-body p-0">
+                {% for item in items %}
+                <div class="p-3 border-top {% if not forloop.first %}border-top{% endif %}">
+                    <div class="mb-2 fw-medium">
+                        {{ item.criteria_text }}
+                    </div>
+
+                    <!-- БЛОК ПОВТОРНОГО НАРУШЕНИЯ -->
+                    {% if item.history %}
+                        <div class="mb-3">
+                            <!-- Кнопка-заголовок (Свернутая) -->
+                            <button type="button"
+                                    class="btn btn-warning btn-sm w-100 text-start d-flex justify-content-between align-items-center"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#history-{{ item.id }}"
+                                    aria-expanded="false"
+                                    style="background-color: #fff3cd; border-color: #ffecb5; color: #664d03;">
+                                <span>
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    Было нарушение ({{ item.history.inspection.date_check|date:"d.m.Y" }})
+                                </span>
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
+
+                            <!-- Разворачиваемый контент -->
+                            <div class="collapse" id="history-{{ item.id }}">
+                                <div class="card card-body border-warning border-top-0 rounded-0 rounded-bottom bg-light p-2">
+
+                                    <!-- Старый комментарий -->
+                                    <div class="small mb-2 fst-italic text-muted border-start border-3 border-warning ps-2">
+                                        "{{ item.history.comment|default:"Без комментария" }}"
+                                    </div>
+
+                                    <!-- Старые фото (если есть) -->
+                                    {% if item.history.photos.all %}
+                                        <div class="d-flex flex-wrap gap-2">
+                                            {% for photo in item.history.photos.all %}
+                                                <a href="{{ photo.image.url }}" target="_blank">
+                                                    <!-- object-fit: cover обрезает картинку, сохраняя пропорции центра -->
+                                                    <img src="{{ photo.image.url }}"
+                                                         style="width: 150px; height: 150px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc;"
+                                                         class="shadow-sm">
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                    <!-- КОНЕЦ БЛОКА ИСТОРИИ -->
+
+                    <div class="row g-2">
+                        <!-- Блок 1: Переключатели -->
+                        <div class="col-12 col-md-4">
+                            <div class="btn-check-group">
+
+                                <!-- Кнопка ОК -->
+                                <!-- Выбрана, ТОЛЬКО если нет комментариев И нет фото -->
+                                <input type="radio" name="compliant_{{ item.id }}"
+                                       id="radio_ok_{{ item.id }}" value="true"
+                                       {% if not item.comment and not item.photos.all %}checked{% endif %}
+                                       disabled> <!-- По умолчанию disabled, JS сам решит, можно ли включить -->
+                                <label for="radio_ok_{{ item.id }}" class="lbl-yes" id="label_ok_{{ item.id }}">✔ ОК</label>
+
+                                <!-- Кнопка Нарушение -->
+                                <!-- Выбрана, если ЕСТЬ комментарий ИЛИ есть фото -->
+                                <input type="radio" name="compliant_{{ item.id }}"
+                                       id="radio_bad_{{ item.id }}" value="false"
+                                       {% if item.comment or item.photos.all %}checked{% endif %}>
+                                <label for="radio_bad_{{ item.id }}" class="lbl-no">✖ Нарушение</label>
+                            </div>
+                        </div>
+
+                        <!-- Блок 2: Комментарий и Фото -->
+                        <div class="col-12 col-md-8">
+                            <!-- Текстовое поле -->
+                            <textarea name="comment_{{ item.id }}" id="comment_{{ item.id }}"
+                                      class="form-control mb-2" rows="1"
+                                      placeholder="Опишите нарушение..."
+                                      oninput="updateItemState({{ item.id }})">{{ item.comment }}</textarea>
+
+                            <div class="mt-2">
+                                <!-- Контейнер для фото (используем его длину для подсчета) -->
+                                <div class="d-flex flex-wrap gap-2 mb-2" id="photo-container-{{ item.id }}">
+                                    {% for photo in item.photos.all %}
+                                        <div class="position-relative photo-wrapper" id="photo-wrapper-{{ photo.id }}">
+                                            <a href="{{ photo.image.url }}" target="_blank">
+                                                <img src="{{ photo.image.url }}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
+                                            </a>
+                                            <button type="button"
+                                                    class="btn position-absolute top-0 end-0 m-1 p-0 border-0 bg-transparent"
+                                                    onclick="deletePhoto({{ photo.id }}, {{ item.id }})"> <!-- Передаем item.id! -->
+                                                <i class="bi bi-trash-fill text-danger" style="font-size: 18px; text-shadow: 0 0 3px rgba(255,255,255, 0.9);"></i>
+                                            </button>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Кнопка добавления фото -->
+                                <!-- id="photo_btn_..." нужен для блокировки -->
+                                <div id="photo_btn_{{ item.id }}">
+                                    <label class="btn btn-sm btn-outline-primary">
+                                        📷 Добавить фото
+                                        <input type="file" style="display: none;" multiple accept="image/*"
+                                               onchange="uploadPhoto(this, {{ item.id }})">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Футер с кнопками остался тем же -->
+        <div class="sticky-footer d-flex gap-2 justify-content-end">
+            <button type="submit" name="action" value="save" class="btn btn-secondary">💾 Сохранить
+            </button>
+            <button type="submit" name="action" value="complete"
+                    class="btn btn-success fw-bold px-4"
+                    onclick="return confirm('Завершить проверку?');">✅ Отправить
+            </button>
+        </div>
+    </form>
+</div>
+<!-- ПОДКЛЮЧЕНИЕ СКРИПТОВ BOOTSTRAP (ОБЯЗАТЕЛЬНО) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // 1. Получаем CSRF токен (нужен для защиты AJAX запросов в Django)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    const csrftoken = getCookie('csrftoken');
+
+
+   // === ГЛАВНАЯ ФУНКЦИЯ ЛОГИКИ ===
+    function updateItemState(itemId) {
+        // 1. Получаем элементы
+        const radioOk = document.getElementById(`radio_ok_${itemId}`);
+        const labelOk = document.getElementById(`label_ok_${itemId}`);
+        const radioBad = document.getElementById(`radio_bad_${itemId}`);
+
+        const commentField = document.getElementById(`comment_${itemId}`);
+        const photoContainer = document.getElementById(`photo-container-${itemId}`);
+
+        // 2. Считываем текущее состояние данных
+        const photoCount = photoContainer.children.length;
+        const commentText = commentField.value.trim();
+        const hasData = (photoCount > 0 || commentText.length > 0);
+
+        // --- ЛОГИКА 1: АВТО-ПЕРЕКЛЮЧЕНИЕ СТАТУСА ---
+        if (hasData) {
+            // Если есть хоть что-то -> Это Нарушение
+            radioBad.checked = true;
+
+            // Блокируем кнопку ОК (нельзя нажать ОК, пока есть данные)
+            radioOk.disabled = true;
+            labelOk.classList.add('disabled-state');
+        } else {
+            // Если все чисто -> Это ОК
+            radioOk.checked = true;
+
+            // Разблокируем кнопку ОК (хотя она и так нажата)
+            radioOk.disabled = false;
+            labelOk.classList.remove('disabled-state');
+        }
+
+        // --- ЛОГИКА 2: ВАЛИДАЦИЯ (ФОТО ТРЕБУЕТ КОММЕНТАРИЯ) ---
+        if (photoCount > 0) {
+            // Если есть фото, комментарий ОБЯЗАТЕЛЕН
+            commentField.required = true;
+            commentField.placeholder = "При наличии фото описание обязательно!";
+
+            // Визуальная подсветка ошибки, если текста нет
+            if (commentText.length === 0) {
+                commentField.classList.add('is-invalid'); // Класс Bootstrap (красная рамка)
+            } else {
+                commentField.classList.remove('is-invalid');
+            }
+        } else {
+            // Если фото нет, комментарий желателен, но не обязателен (для статуса Нарушение)
+            // Но в твоем ТЗ "позволяем оставить комментарий но не делать фото"
+            commentField.required = false;
+            commentField.placeholder = "Опишите нарушение...";
+            commentField.classList.remove('is-invalid');
+        }
+    }
+
+
+    // === ОБНОВЛЕННАЯ ЗАГРУЗКА (вызывает updateItemState) ===
+    function uploadPhoto(inputElement, itemId) {
+        const files = inputElement.files;
+        if (files.length === 0) return;
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('photos', files[i]);
+        }
+
+        const url = `/api/upload-photo/${itemId}/`;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken},
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                const container = document.getElementById(`photo-container-${itemId}`);
+                data.photos.forEach(photo => {
+                    const html = `
+                        <div class="position-relative photo-wrapper" id="photo-wrapper-${photo.id}">
+                            <a href="${photo.url}" target="_blank">
+                                <img src="${photo.url}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
+                            </a>
+                            <button type="button"
+                                    class="btn position-absolute top-0 end-0 m-1 p-0 border-0 bg-transparent"
+                                    onclick="deletePhoto(${photo.id}, ${itemId})">
+                                <i class="bi bi-trash-fill text-danger" style="font-size: 18px; text-shadow: 0 0 3px rgba(255,255,255, 0.9);"></i>
+                            </button>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', html);
+                });
+
+                // ВАЖНО: Обновляем состояние кнопок (заблокировать ОК)
+                updateItemState(itemId);
+
+                inputElement.value = '';
+            }
+        });
+    }
+
+    // === ОБНОВЛЕННОЕ УДАЛЕНИЕ (принимает itemId и вызывает updateItemState) ===
+    function deletePhoto(photoId, itemId) {
+        if (!confirm('Удалить фото?')) return;
+
+        const url = `/api/delete-photo/${photoId}/`;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                const wrapper = document.getElementById(`photo-wrapper-${photoId}`);
+                if (wrapper) wrapper.remove();
+
+                // ВАЖНО: Обновляем состояние (разблокировать ОК, если фото кончились)
+                updateItemState(itemId);
+            }
+        });
+    }
+
+    // === АВТОСОХРАНЕНИЕ КОММЕНТАРИЯ ===
+    // Находим все текстовые поля и вешаем обработчик "blur" (потеря фокуса)
+    document.addEventListener("DOMContentLoaded", function() {
+        const textAreas = document.querySelectorAll('textarea[name^="comment_"]');
+
+        textAreas.forEach(area => {
+            area.addEventListener('blur', function() {
+                // Если текст изменился - отправляем его на сервер
+                saveCommentAjax(this);
+            });
+        });
+
+        // ... твой старый код инициализации кнопок ...
+    });
+
+    function saveCommentAjax(textarea) {
+        const itemId = textarea.id.split('_')[1];
+        const text = textarea.value;
+        const url = `/api/save-comment/${itemId}/`; // Нам нужно создать этот URL
+
+        const formData = new FormData();
+        formData.append('comment', text);
+
+        // Отправляем в фоне
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken},
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                console.log('Комментарий сохранен');
+                textarea.style.borderColor = "#198754"; // Зеленая рамка - успех
+                setTimeout(() => textarea.style.borderColor = "", 1000);
+            }
+        });
+    }
+
+    // === БЛОК ИНИЦИАЛИЗАЦИИ ===
+    // Запускается один раз, когда вся страница загружена
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Ищем все радиокнопки "ОК", чтобы понять, какие ID вопросов есть на странице
+        // (Они имеют id вида "radio_ok_15", "radio_ok_23" и т.д.)
+        const allOkButtons = document.querySelectorAll('[id^="radio_ok_"]');
+
+        allOkButtons.forEach(btn => {
+            // 2. Вытаскиваем ID из названия (например, "radio_ok_15" -> "15")
+            const itemId = btn.id.split('_')[2];
+
+            // 3. Принудительно запускаем проверку состояния
+            updateItemState(itemId);
+        });
+    });
+
+    // === ЗАЩИТА ОТ ОТПРАВКИ НЕВАЛИДНОЙ ФОРМЫ ===
+    document.getElementById('inspectionForm').addEventListener('submit', function(event) {
+        // Ищем все поля комментариев, которые помечены как invalid (красная рамка из функции выше)
+        const invalidFields = document.querySelectorAll('textarea.is-invalid');
+
+        if (invalidFields.length > 0) {
+            // Отменяем отправку
+            event.preventDefault();
+
+            // Скроллим к первой ошибке
+            invalidFields[0].scrollIntoView({behavior: "smooth", block: "center"});
+            invalidFields[0].focus();
+
+            alert("Ошибка! Если вы прикрепили фото, вы ОБЯЗАНЫ добавить описание нарушения.");
+        }
+    });
+</script>
+</body>
+</html>

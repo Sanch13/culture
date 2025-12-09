@@ -2,21 +2,36 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мои проверки</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
           rel="stylesheet">
+    <style>
+        .template-card {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .template-card:hover {
+            transform: translateY(-5px);
+            border-color: #0d6efd;
+        }
+    </style>
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-dark bg-primary mb-4">
+<!-- Меню навигации -->
+<nav class="navbar navbar-dark bg-primary mb-4 shadow-sm">
     <div class="container">
-        <span class="navbar-brand">📱 CheckSystem</span>
-        <div class="d-flex align-items-center text-white">
-            <span class="me-3">{{ user.get_full_name }}</span>
+        <span class="navbar-brand fw-bold">📱 CheckSystem</span>
+        <div class="d-flex align-items-center text-white gap-3">
+            <!-- Выводим имя пользователя -->
+            <span class="d-none d-sm-inline">{{ user.get_full_name}} ID {{ user.id }} </span>
+
+            <!-- Кнопка выхода (через форму, так как нужен POST запрос) -->
             <form action="{% url 'users:logout' %}" method="post" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-light text-primary">
-                    Выйти
+                <button type="submit" class="btn btn-sm btn-light text-primary fw-bold">Выйти
                 </button>
             </form>
         </div>
@@ -24,14 +39,79 @@
 </nav>
 
 <div class="container">
-    <div class="card shadow-sm p-4 text-center">
-        <h1>👋 Добро пожаловать!</h1>
-        <p class="lead">На сегодня проверок пока не назначено.</p>
-        <button class="btn btn-success btn-lg mt-3" disabled>
-            Начать проверку
-        </button>
+
+    <!-- Сообщения (например, "Проверка успешно завершена") -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- БЛОК 1: Кнопки "Начать проверку" -->
+    <h4 class="mb-3 text-secondary">🚀 Начать новую проверку</h4>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 mb-5">
+        {% for template in available_templates %}
+        <div class="col">
+            <!-- Вся карточка - это форма отправки POST запроса -->
+            <form action="{% url 'start_inspection' template.id %}" method="post">
+                {% csrf_token %}
+                <button type="submit"
+                        class="card h-100 w-100 text-start shadow-sm border-0 template-card p-0 bg-white">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary">{{ template.name }}</h5>
+                        <p class="card-text text-muted small">
+                            📍 {{ template.location.name }}<br>
+                            📝 Секций: {{ template.sections.count }}
+                        </p>
+                        <span class="btn btn-sm btn-outline-primary mt-2">Начать →</span>
+                    </div>
+                </button>
+            </form>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">Нет доступных шаблонов для проверки.</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- БЛОК 2: Мои последние отчеты (Черновики и завершенные) -->
+    <h4 class="mb-3 text-secondary">📂 Мои последние отчеты</h4>
+    <div class="card shadow-sm border-0">
+        <div class="list-group list-group-flush">
+            {% for inspection in my_inspections %}
+            <!-- Ссылка ведет на форму заполнения -->
+            <a href="{% url 'inspection_form' inspection.id %}"
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+                <div>
+                    <div class="fw-bold text-dark">
+                        {{ inspection.template.name }}
+                    </div>
+                    <div class="small text-muted">
+                        📅 {{ inspection.date_check|date:"d.m.Y" }} | 📍 {{
+                        inspection.location_snapshot }}
+                    </div>
+                </div>
+
+                <!-- Статус отчета -->
+                {% if inspection.is_completed %}
+                <span class="badge bg-success rounded-pill">Завершен</span>
+                {% else %}
+                <span class="badge bg-warning text-dark rounded-pill">Черновик</span>
+                {% endif %}
+            </a>
+            {% empty %}
+            <div class="p-4 text-center text-muted">
+                Вы еще не проводили проверок.
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
