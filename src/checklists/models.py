@@ -125,6 +125,10 @@ class Inspection(models.Model):
         verbose_name = "Отчет о проверке"
         verbose_name_plural = "Журнал: Отчеты"
 
+        # --- НОВОЕ ОГРАНИЧЕНИЕ ---
+        # Уникальная пара: Шаблон + Дата
+        unique_together = ["template", "date_check"]
+
 
 class InspectionItem(models.Model):
     """
@@ -184,3 +188,90 @@ class ViolationPhoto(models.Model):
     class Meta:
         verbose_name = "Фото нарушения"
         verbose_name_plural = "Фото нарушений"
+
+
+class Schedule(models.Model):
+    """
+    План-график проверок.
+    Генерируется автоматически, но может быть изменен вручную (админом или автозаменой).
+    """
+
+    # Кто проверяет? (Вася)
+    inspector = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="schedule_items",
+        verbose_name="Назначенный сотрудник",
+    )
+
+    # Что проверяет? (Цех №1)
+    template = models.ForeignKey(
+        ChecklistTemplate, on_delete=models.CASCADE, verbose_name="Шаблон проверки"
+    )
+
+    # Когда? (2025-10-25)
+    date = models.DateField("Дата назначения")
+
+    # Результат (Ссылка на отчет)
+    # Изначально пусто. Заполнится, когда Вася нажмет "Начать".
+    inspection = models.OneToOneField(
+        Inspection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="schedule_item",
+        verbose_name="Выполненный отчет",
+    )
+    is_swapped = models.BooleanField("Была замена", default=False)
+
+    def __str__(self):
+        status = "✅" if self.inspection else "⚪️"
+        return (
+            f"{status} {self.date} | {self.template.name} -> {self.inspector.last_name}"
+        )
+
+    class Meta:
+        # ЗАЩИТА: Нельзя запланировать две проверки одного шаблона на один день.
+        # (Если у вас по бизнес-логике можно проверять один цех 2 раза в день — убери эту строку).
+        unique_together = ["template", "date"]
+
+        ordering = ["date", "template"]
+        verbose_name = "Запись в расписании"
+        verbose_name_plural = "График проверок"
+
+
+class SwapLog(models.Model):
+    """
+    История замен (кто, когда и почему отказался).
+    Нужна для администратора, чтобы видеть 'прогульщиков'.
+    """
+
+    # Кто запросил замену (Инициатор)
+    requestor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="swap_requests",
+        verbose_name="Инициатор",
+    )
+    # С кем поменялся (Жертва)
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="swap_targets",
+        verbose_name="На кого заменили",
+    )
+    # Дата самого действия
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Какую дату отдал
+    source_date = models.DateField("Дата (была)")
+    # Какую дату получил
+    target_date = models.DateField("Дата (стала)")
+
+    # Причина (обязательно)
+    reason = models.TextField("Причина замены")
+
+    class Meta:
+        verbose_name = "История замен"
+        verbose_name_plural = "Журнал: Замены"
+        ordering = ["-created_at"]

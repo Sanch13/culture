@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.db.models import Count, Q
 from django.utils import timezone
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
@@ -10,9 +13,10 @@ from checklists.models import (
     Inspection,
     ViolationPhoto,
     InspectionItem,
+    Schedule,
 )
 from checklists.decorators import admin_required, employee_required
-from checklists.services import create_inspection_from_template
+from checklists.services import create_inspection_from_template, perform_auto_swap
 
 
 # --- ЗОНА АДМИНИСТРАТОРА (Строгий режим) ---
@@ -86,22 +90,99 @@ def admin_inspection_detail(request, inspection_id):
     return render(request, "checklists/inspection_readonly.html", context)
 
 
+@admin_required
+def admin_weekly_schedule(request):
+    """
+    Матрица расписания: Строки - Шаблоны, Колонки - Дни недели (Пн-Пт).
+    """
+    today = timezone.now().date()
+
+    # 1. Вычисляем даты Пн-Пт текущей недели
+    # today.weekday(): 0=Пн ... 6=Вс
+    start_of_week = today - timedelta(days=today.weekday())  # Понедельник
+
+    # Генерируем список из 5 дней (Пн, Вт, Ср, Чт, Пт)
+    week_days = [start_of_week + timedelta(days=i) for i in range(5)]
+
+    # 2. Получаем данные
+    templates = ChecklistTemplate.objects.all().order_by("id")
+
+    # Загружаем расписание только на эти 5 дней
+    schedules = Schedule.objects.filter(
+        date__range=[week_days[0], week_days[-1]]
+    ).select_related("inspector", "inspection")
+
+    # 3. Превращаем список расписания в словарь для быстрого поиска
+    # Ключ: (template_id, date) -> Значение: schedule_object
+    schedule_map = {}
+    for item in schedules:
+        schedule_map[(item.template_id, item.date)] = item
+
+    # 4. Собираем структуру для таблицы
+    table_rows = []
+
+    for tmpl in templates:
+        row = {"template": tmpl, "cells": []}
+
+        # Для каждого дня недели ищем, есть ли запись для этого шаблона
+        for day in week_days:
+            # Ищем в словаре
+            cell_data = schedule_map.get((tmpl.id, day))
+            row["cells"].append(cell_data)  # Добавляем объект Schedule или None
+
+        table_rows.append(row)
+
+    context = {
+        "week_days": week_days,  # Заголовки колонок
+        "table_rows": table_rows,  # Тело таблицы
+        "today": today,
+    }
+    return render(request, "checklists/admin_schedule.html", context)
+
+
 # --- ЗОНА СОТРУДНИКА (Строгий режим) ---
 @employee_required
 def employee_dashboard(request):
     user = request.user
+    today = timezone.now().date()
 
-    # ФИЛЬТРАЦИЯ ДАННЫХ:
-    # Сотрудник видит ТОЛЬКО свои проверки.
-    # Даже если он подменит ID в URL, он не увидит чужое (это реализуем ниже).
+    # 1. Вычисляем конец текущей недели (Воскресенье)
+    # weekday(): 0=Пн ... 6=Вс.
+    # Дней до воскресенья = 6 - номер_дня_недели
+    days_until_sunday = 6 - today.weekday()
+    end_of_week = today + timedelta(days=days_until_sunday)
 
-    available_templates = ChecklistTemplate.objects.all()
+    # 2. Ищем задание в диапазоне [Сегодня ... Воскресенье]
+    # Мы не смотрим "Вчера", так как это уже просрочено (другая логика),
+    # и не смотрим "Следующую неделю" (как ты и просил).
+
+    current_task = (
+        Schedule.objects.filter(inspector=user, date__range=[today, end_of_week])
+        .select_related("template", "inspection")
+        .order_by("date")
+        .first()
+    )
+
+    # 3. Дополнительные данные для шаблона
+    is_today = False
+    days_until = 0
+
+    if current_task:
+        if current_task.date == today:
+            is_today = True
+        else:
+            is_today = False
+            days_until = (current_task.date - today).days
+
+    # 4. История (остается без изменений)
     my_inspections = Inspection.objects.filter(inspector=user).order_by("-created_at")[
         :5
     ]
 
     context = {
-        "available_templates": available_templates,
+        "task": current_task,  # Само задание
+        "is_today": is_today,  # Флаг: сегодня или нет
+        "days_until": days_until,  # Сколько дней ждать
         "my_inspections": my_inspections,
     }
     return render(request, "checklists/employee_dashboard.html", context)
@@ -225,14 +306,87 @@ def inspection_form_view(request, inspection_id):
 @require_POST
 def start_inspection_view(request, template_id):
     template = get_object_or_404(ChecklistTemplate, pk=template_id)
+    today = timezone.now().date()
+    user = request.user
 
-    inspection = create_inspection_from_template(
-        template=template,
-        user=request.user,
-        date=timezone.now().date(),
-        location_snapshot=template.location.name,
-    )
+    # --- БЛОК 0: ИЩЕМ ЗАПИСЬ В РАСПИСАНИИ (НОВОЕ) ---
+    # Нам нужно знать, какую именно строчку в плане мы сейчас выполняем
+    schedule_item = Schedule.objects.filter(
+        inspector=user, date=today, template=template
+    ).first()
+
+    # Если этого задания нет в плане — выкидываем (строгий режим)
+    if not schedule_item:
+        # messages.error(request, "Ошибка: Вам не назначена эта проверка на сегодня.")
+        return redirect("employee_dashboard")
+
+    # --- БЛОК 1: ПРОВЕРКА НА СУЩЕСТВОВАНИЕ ОТЧЕТА ---
+    existing_inspection = Inspection.objects.filter(
+        template=template, date_check=today
+    ).first()
+
+    inspection = None  # Переменная для итогового отчета
+
+    if existing_inspection:
+        # Если отчет есть, и он МОЙ -> просто переходим в него
+        if existing_inspection.inspector == user:
+            inspection = existing_inspection
+        # Если он ЧУЖОЙ -> Ошибка
+        else:
+            # messages.error(request,
+            #                f"Ошибка! Эту проверку уже начал {existing_inspection.inspector.last_name}.")
+            return redirect("employee_dashboard")
+    else:
+        # --- БЛОК 2: СОЗДАНИЕ НОВОГО ОТЧЕТА ---
+        try:
+            inspection = create_inspection_from_template(
+                template=template,
+                user=user,
+                date=today,
+                location_snapshot=template.location.name,
+            )
+        except Exception:
+            # Если база не дала создать (дубль или ошибка)
+            # messages.error(request, "Не удалось создать проверку. Попробуйте еще раз.")
+            return redirect("employee_dashboard")
+
+    # --- БЛОК 3: ПРИВЯЗКА К РАСПИСАНИЮ (САМОЕ ВАЖНОЕ!) ---
+    # Мы говорим расписанию: "Смотри, вот отчет по твоему заданию"
+    if schedule_item and schedule_item.inspection != inspection:
+        schedule_item.inspection = inspection
+        schedule_item.save()
+        print(
+            f"DEBUG: Отчет {inspection.id} успешно привязан к расписанию {schedule_item.id}"
+        )
+
     return redirect("inspection_form", inspection_id=inspection.id)
+
+
+@employee_required
+@require_POST
+def auto_swap_shift(request, schedule_id):
+    schedule_item = get_object_or_404(Schedule, id=schedule_id, inspector=request.user)
+
+    if schedule_item.inspection:
+        messages.error(request, "Нельзя отказаться от начатого задания.")
+        return redirect("employee_dashboard")
+
+    # Получаем причину из формы
+    reason = request.POST.get("reason", "").strip()
+
+    if not reason:
+        messages.error(request, "Вы обязаны указать причину отказа!")
+        return redirect("employee_dashboard")
+
+    # Вызываем сервис
+    success, message = perform_auto_swap(schedule_item, reason)
+
+    if success:
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+
+    return redirect("employee_dashboard")
 
 
 # --- ГЛАВНЫЙ ВХОД (Диспетчер) ---

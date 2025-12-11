@@ -4,19 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мои проверки</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-          rel="stylesheet">
-    <style>
-        .template-card {
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .template-card:hover {
-            transform: translateY(-5px);
-            border-color: #0d6efd;
-        }
-    </style>
+    <!-- Подключаем Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Подключаем иконки для красоты -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 </head>
 <body class="bg-light">
 
@@ -26,13 +17,12 @@
         <span class="navbar-brand fw-bold">📱 CheckSystem</span>
         <div class="d-flex align-items-center text-white gap-3">
             <!-- Выводим имя пользователя -->
-            <span class="d-none d-sm-inline">{{ user.get_full_name}} ID {{ user.id }} </span>
+            <span class="d-none d-sm-inline">{{ user.first_name }} {{ user.last_name }} (ID: {{ user.id }})</span>
 
-            <!-- Кнопка выхода (через форму, так как нужен POST запрос) -->
+            <!-- Кнопка выхода -->
             <form action="{% url 'users:logout' %}" method="post" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-light text-primary fw-bold">Выйти
-                </button>
+                <button type="submit" class="btn btn-sm btn-light text-primary fw-bold">Выйти</button>
             </form>
         </div>
     </div>
@@ -40,78 +30,172 @@
 
 <div class="container">
 
-    <!-- Сообщения (например, "Проверка успешно завершена") -->
+    <!-- Блок сообщений (Alerts) -->
     {% if messages %}
-    {% for message in messages %}
-    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-    {% endfor %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
     {% endif %}
 
-    <!-- БЛОК 1: Кнопки "Начать проверку" -->
-    <h4 class="mb-3 text-secondary">🚀 Начать новую проверку</h4>
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 mb-5">
-        {% for template in available_templates %}
-        <div class="col">
-            <!-- Вся карточка - это форма отправки POST запроса -->
-            <form action="{% url 'start_inspection' template.id %}" method="post">
-                {% csrf_token %}
-                <button type="submit"
-                        class="card h-100 w-100 text-start shadow-sm border-0 template-card p-0 bg-white">
-                    <div class="card-body">
-                        <h5 class="card-title text-primary">{{ template.name }}</h5>
-                        <p class="card-text text-muted small">
-                            📍 {{ template.location.name }}<br>
-                            📝 Секций: {{ template.sections.count }}
-                        </p>
-                        <span class="btn btn-sm btn-outline-primary mt-2">Начать →</span>
-                    </div>
-                </button>
-            </form>
-        </div>
-        {% empty %}
-        <div class="col-12">
-            <div class="alert alert-info">Нет доступных шаблонов для проверки.</div>
-        </div>
-        {% endfor %}
-    </div>
 
-    <!-- БЛОК 2: Мои последние отчеты (Черновики и завершенные) -->
+    <!-- ====================================================== -->
+    <!-- БЛОК 1: АКТУАЛЬНОЕ ЗАДАНИЕ (На эту неделю) -->
+    <!-- ====================================================== -->
+
+    {% if task %}
+        <h4 class="mb-3 text-secondary">📅 Ваш график на эту неделю</h4>
+
+        <div class="card shadow-sm border-primary mb-5">
+            <div class="card-body text-center p-4 p-md-5">
+
+                <!-- Заголовок: Дата и статус -->
+                {% if is_today %}
+                    <h6 class="text-uppercase text-danger fw-bold mb-2">🔥 Требуется проверка СЕГОДНЯ</h6>
+                {% else %}
+                    <h6 class="text-uppercase text-primary fw-bold mb-2">
+                        🔜 Плановая проверка: {{ task.date|date:"l, d E" }}
+                    </h6>
+                    <p class="text-muted mb-2">
+                        (Через {{ days_until }} дн.)
+                    </p>
+                {% endif %}
+
+                <h1 class="display-6 text-dark mb-3">{{ task.template.name }}</h1>
+                <p class="lead text-muted">📍 {{ task.template.location.name }}</p>
+
+                <hr class="my-4">
+
+                <!-- ЛОГИКА КНОПОК -->
+                {% if task.inspection %}
+                    <!-- Сценарий A: Проверка УЖЕ НАЧАТА -->
+
+                    {% if task.inspection.is_completed %}
+                        <!-- A1: Завершено -->
+                        <button class="btn btn-success btn-lg px-5 w-100" disabled>
+                            ✅ Задание выполнено
+                        </button>
+                        <p class="mt-2 text-muted small">Спасибо за работу!</p>
+                    {% else %}
+                        <!-- A2: Черновик -->
+                        <a href="{% url 'inspection_form' task.inspection.id %}" class="btn btn-warning btn-lg px-5 fw-bold w-100 shadow-sm" style="max-width: 400px;">
+                            ✏️ Продолжить выполнение
+                        </a>
+                        <!-- ТУТ НЕТ КНОПКИ АВТОЗАМЕНЫ. НАЗАД ПУТИ НЕТ. -->
+                        <p class="mt-3 text-muted small">
+                            <i class="bi bi-lock-fill"></i> Вы начали эту проверку. Автозамена недоступна.
+                        </p>
+                    {% endif %}
+
+                {% else %}
+                    <!-- Сценарий B: Проверка ЕЩЕ НЕ НАЧАТА (Здесь ЕСТЬ автозамена) -->
+
+                    <div class="d-flex flex-column gap-3 align-items-center justify-content-center">
+
+                        <!-- Кнопка 1: Начать -->
+                        <form action="{% url 'start_inspection' task.template.id %}" method="post" class="w-100" style="max-width: 400px;">
+                            {% csrf_token %}
+
+                            {% if is_today %}
+                                <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
+                                    🚀 Начать проверку
+                                </button>
+                            {% else %}
+                                <button type="button" class="btn btn-secondary btn-lg w-100 fw-bold" disabled>
+                                    ⏳ Будет доступно {{ task.date|date:"d.m.Y" }}
+                                </button>
+                            {% endif %}
+                        </form>
+
+                        <!-- Разделитель -->
+                        <div class="text-muted small">- ИЛИ -</div>
+
+                        <!-- Кнопка 2: Автозамена -->
+                        <button type="button" class="btn btn-outline-danger w-100" style="max-width: 400px;"
+                                data-bs-toggle="modal" data-bs-target="#swapModal">
+                            🔄 Не могу выполнить (Автозамена)
+                        </button>
+
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- МОДАЛЬНОЕ ОКНО ДЛЯ АВТОЗАМЕНЫ -->
+        <div class="modal fade" id="swapModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">⛔ Отказ от смены</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{% url 'auto_swap_shift' task.id %}" method="post">
+                        {% csrf_token %}
+                        <div class="modal-body text-start">
+                            <p>Вы собираетесь перенести проверку <strong>{{ task.date|date:"d.m.Y" }}</strong> на следующую неделю.</p>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Укажите причину (Обязательно):</label>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Отпуск, Командировка..."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-danger">Подтвердить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <!-- Если на этой неделе заданий нет -->
+        <div class="alert alert-light text-center p-5 border shadow-sm mb-5">
+            <h1 class="text-muted display-4">☕️</h1>
+            <h3>На этой неделе проверок нет</h3>
+            <p class="text-muted">Расписание на следующую неделю будет сформировано позже.</p>
+        </div>
+    {% endif %}
+
+
+    <!-- ====================================================== -->
+    <!-- БЛОК 2: ИСТОРИЯ (Оставляем как было) -->
+    <!-- ====================================================== -->
     <h4 class="mb-3 text-secondary">📂 Мои последние отчеты</h4>
-    <div class="card shadow-sm border-0">
+    <div class="card shadow-sm border-0 mb-5">
         <div class="list-group list-group-flush">
             {% for inspection in my_inspections %}
-            <!-- Ссылка ведет на форму заполнения -->
-            <a href="{% url 'inspection_form' inspection.id %}"
-               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
-                <div>
-                    <div class="fw-bold text-dark">
-                        {{ inspection.template.name }}
+                <!-- Ссылка ведет на форму просмотра/заполнения -->
+                <a href="{% url 'inspection_form' inspection.id %}"
+                   class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <div class="fw-bold text-dark">
+                            {{ inspection.template.name }}
+                        </div>
+                        <div class="small text-muted">
+                            📅 {{ inspection.date_check|date:"d.m.Y" }} | 📍 {{ inspection.location_snapshot }}
+                        </div>
                     </div>
-                    <div class="small text-muted">
-                        📅 {{ inspection.date_check|date:"d.m.Y" }} | 📍 {{
-                        inspection.location_snapshot }}
-                    </div>
-                </div>
 
-                <!-- Статус отчета -->
-                {% if inspection.is_completed %}
-                <span class="badge bg-success rounded-pill">Завершен</span>
-                {% else %}
-                <span class="badge bg-warning text-dark rounded-pill">Черновик</span>
-                {% endif %}
-            </a>
+                    <!-- Статус отчета -->
+                    {% if inspection.is_completed %}
+                        <span class="badge bg-success rounded-pill">Завершен</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark rounded-pill">Черновик</span>
+                    {% endif %}
+                </a>
             {% empty %}
-            <div class="p-4 text-center text-muted">
-                Вы еще не проводили проверок.
-            </div>
+                <div class="p-4 text-center text-muted">
+                    Вы еще не проводили проверок.
+                </div>
             {% endfor %}
         </div>
     </div>
 </div>
 
+<!-- Подключаем Bootstrap JS (Нужен для работы Модального окна!) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>

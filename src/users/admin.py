@@ -6,6 +6,7 @@ from users.models import User, UserAbsence
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     list_display = (
+        "id",
         "email",
         "first_name",
         "last_name",

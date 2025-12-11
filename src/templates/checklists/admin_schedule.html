@@ -1,0 +1,87 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}График проверок{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🗓 График на неделю</h1>
+    <div class="text-muted">
+        Неделя: {{ week_days.0|date:"d.m" }} - {{ week_days.4|date:"d.m" }}
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover mb-0 text-center align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="min-width: 200px; text-align: left;">Участок / Шаблон</th>
+                    {% for day in week_days %}
+                        <th style="min-width: 150px;" class="{% if day == today %}table-primary{% endif %}">
+                            {{ day|date:"l" }}<br> <!-- День недели -->
+                            <small class="text-muted">{{ day|date:"d.m" }}</small>
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_rows %}
+                <tr>
+                    <!-- Колонка 1: Название участка -->
+                    <td class="text-start fw-bold bg-light">
+                        {{ row.template.location.name }}<br>
+                        <small class="text-muted fw-normal">{{ row.template.name }}</small>
+                    </td>
+
+                    <!-- Колонки 2-6: Дни недели -->
+                    {% for cell in row.cells %}
+                        {% if cell %}
+                            <!-- ЕСЛИ ЕСТЬ НАЗНАЧЕНИЕ -->
+                            <!-- Определяем цвет ячейки -->
+                            <td class="{% if cell.inspection.is_completed %}bg-success bg-opacity-25{% else %}bg-danger bg-opacity-10{% endif %}">
+
+                                <!-- ФИО -->
+                                <div class="fw-bold small">
+                                    {{ cell.inspector.last_name }} {{ cell.inspector.first_name|slice:":1" }}.
+                                </div>
+
+                                <!-- Статус (Иконка) -->
+                                <div class="mt-1">
+                                    {% if cell.inspection.is_completed %}
+                                        <a href="{% url 'admin_report_detail' cell.inspection.id %}" class="badge bg-success text-decoration-none">
+                                            ✅ Сдано
+                                        </a>
+                                    {% else %}
+                                        <span class="badge bg-secondary text-dark bg-opacity-10">
+                                            ⏳ Ожидание
+                                        </span>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Метка автозамены -->
+                                {% if cell.is_swapped %}
+                                    <div class="mt-1" title="Была замена">
+                                        <i class="bi bi-arrow-left-right text-primary small"></i>
+                                    </div>
+                                {% endif %}
+                            </td>
+                        {% else %}
+                            <!-- ЕСЛИ ЯЧЕЙКА ПУСТАЯ -->
+                            <td class="bg-light text-muted small">
+                                -
+                            </td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3 text-end">
+    <a href="/admin/checklists/schedule/" class="btn btn-outline-secondary btn-sm">
+        ⚙️ Редактировать в Django-Admin
+    </a>
+</div>
+{% endblock %}

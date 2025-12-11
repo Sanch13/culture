@@ -9,6 +9,7 @@ from checklists.models import (
     Inspection,
     InspectionItem,
     ViolationPhoto,
+    Schedule,
 )
 
 
@@ -113,3 +114,17 @@ class InspectionItemAdmin(admin.ModelAdmin):
     list_filter = ("is_compliant", "inspection__date_check")
     search_fields = ("comment", "criteria_text")
     inlines = [ViolationPhotoInline]  # <-- Здесь можно добавлять фото
+
+
+@admin.register(Schedule)
+class ScheduleAdmin(admin.ModelAdmin):
+    list_display = ("date", "template", "inspector", "status_display")
+    list_filter = ("date", "template", "inspector")
+    date_hierarchy = "date"  # Удобная навигация по датам сверху
+
+    def status_display(self, obj):
+        if obj.inspection:
+            return "✅ Выполнено"
+        return "⚪️ Ожидает"
+
+    status_display.short_description = "Статус"

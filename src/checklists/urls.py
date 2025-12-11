@@ -12,6 +12,7 @@ urlpatterns = [
         views.admin_inspection_detail,
         name="admin_report_detail",
     ),
+    path("cabinet/schedule/", views.admin_weekly_schedule, name="admin_schedule"),
     # Предпросмотр конкретного шаблона
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
     path("my-checks/", views.employee_dashboard, name="employee_dashboard"),
@@ -38,4 +39,5 @@ urlpatterns = [
         views.save_comment_ajax,
         name="save_comment_ajax",
     ),
+    path("api/swap/<int:schedule_id>/", views.auto_swap_shift, name="auto_swap_shift"),
 ]
