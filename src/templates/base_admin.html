@@ -69,21 +69,25 @@
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'admin_history' %}active{% endif %}"
                        href="{% url 'admin_history' %}">
-                       🗂 Журнал проверок
+                        🗂 Журнал проверок
                     </a>
                 </li>
 
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'admin_schedule' %}active{% endif %}"
                        href="{% url 'admin_schedule' %}">
-                       🗓 График
+                        🗓 График
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'admin_employees' %}active{% endif %}"
+                       href="{% url 'admin_employees' %}">
+                        👥 Сотрудники
                     </a>
                 </li>
 
                 <!-- Заглушки для будущих разделов -->
-                <li class="nav-item">
-                    <a class="nav-link" href="#">Сотрудники</a>
-                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="#">Аналитика</a>
                 </li>

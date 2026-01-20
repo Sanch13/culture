@@ -13,6 +13,7 @@ urlpatterns = [
         name="admin_report_detail",
     ),
     path("cabinet/schedule/", views.admin_weekly_schedule, name="admin_schedule"),
+    path("cabinet/employees/", views.admin_employees_list, name="admin_employees"),
     # Предпросмотр конкретного шаблона
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
     path("my-checks/", views.employee_dashboard, name="employee_dashboard"),
