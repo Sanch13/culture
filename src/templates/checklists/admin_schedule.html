@@ -6,26 +6,25 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>🗓 График работы</h1>
 
-    <!-- Кнопки генерации -->
-    <div class="d-flex gap-2">
-        <!-- Кнопка 1: Текущая + Следующая неделя -->
-        <form action="{% url 'admin_generate_schedule' %}" method="post">
-            {% csrf_token %}
-            <!-- weeks=1 означает: "Добить эту неделю и заполнить 1 следующую" -->
-            <input type="hidden" name="weeks" value="1">
-            <button type="submit" class="btn btn-primary">
+        <!-- Кнопки генерации -->
+        <div class="d-flex gap-2">
+                <!-- Кнопка 1 (+1 неделя) -->
+            <button type="button" class="btn btn-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#generateModal"
+                    data-weeks="1"
+                    data-text="Заполнить остаток текущей и следующую неделю">
                 <i class="bi bi-gear-wide-connected"></i> Заполнить след. неделю
             </button>
-        </form>
 
-        <!-- Кнопка 2: Текущая + 2 недели -->
-        <form action="{% url 'admin_generate_schedule' %}" method="post">
-            {% csrf_token %}
-            <input type="hidden" name="weeks" value="2">
-            <button type="submit" class="btn btn-outline-primary">
+            <!-- Кнопка 2 (+2 недели) -->
+            <button type="button" class="btn btn-outline-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#generateModal"
+                    data-weeks="2"
+                    data-text="Сгенерировать расписание сразу на 2 недели вперед">
                 +2 недели
             </button>
-        </form>
     </div>
 
 </div>
@@ -111,4 +110,70 @@
 <div class="mt-3 text-end text-muted small">
     * Таблица отображает только рабочие дни (Пн-Пт).
 </div>
+
+<!-- МОДАЛЬНОЕ ОКНО ГЕНЕРАЦИИ -->
+<div class="modal fade" id="generateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="generateModalLabel">⚙️ Генерация расписания</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- ЕДИНСТВЕННАЯ ФОРМА ОТПРАВКИ -->
+            <form action="{% url 'admin_generate_schedule' %}" method="post">
+                {% csrf_token %}
+
+                <div class="modal-body text-center p-4">
+                    <div class="display-1 text-primary mb-3">
+                        <i class="bi bi-calendar-range"></i>
+                    </div>
+
+                    <h5 class="mb-3">Вы уверены?</h5>
+
+                    <!-- Сюда JS подставит текст из кнопки (data-text) -->
+                    <p class="text-muted" id="modal-desc-text">...</p>
+
+                    <div class="alert alert-warning small d-flex align-items-center justify-content-center gap-2">
+                        <i class="bi bi-info-circle-fill"></i>
+                        Существующие записи перезаписаны не будут.
+                    </div>
+
+                    <!-- Скрытое поле, куда JS подставит 1 или 2 -->
+                    <input type="hidden" name="weeks" id="modal-weeks-input" value="1">
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">🚀 Запустить</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<!-- JAVASCRIPT ДЛЯ ПЕРЕДАЧИ ДАННЫХ В МОДАЛКУ -->
+<script>
+    const generateModal = document.getElementById('generateModal')
+    if (generateModal) {
+        generateModal.addEventListener('show.bs.modal', event => {
+            // Кнопка, которая вызвала модалку
+            const button = event.relatedTarget
+
+            // Извлекаем данные из атрибутов data-*
+            const weeks = button.getAttribute('data-weeks')
+            const text = button.getAttribute('data-text')
+
+            // Находим элементы внутри модалки
+            const modalInput = generateModal.querySelector('#modal-weeks-input')
+            const modalDesc = generateModal.querySelector('#modal-desc-text')
+
+            // Обновляем их содержимое
+            modalInput.value = weeks
+            modalDesc.textContent = text
+        })
+    }
+</script>
 {% endblock %}
