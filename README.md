@@ -152,3 +152,23 @@ python manage.py loaddata default_fixtures.json --database=default
 
 Загрузка данных в базу psql (PostgreSQL):
 python manage.py loaddata psql_fixtures.json --database=psql
+
+
+
+### Очистка расписания (Reset)
+Давай удалим **только расписание** (не трогая пользователей и шаблоны), чтобы проверить генерацию с чистого листа.
+Самый быстрый способ — через консоль (Shell).
+
+1.  Открой терминал.
+2.  Зайди в shell:
+    ```bash
+    docker compose -f docker-compose.local.yml exec web python manage.py shell
+    ```
+3.  Выполни команду удаления:
+    ```python
+    from checklists.models import Schedule
+    Schedule.objects.all().delete()
+    ```
+    *(Должно написать что-то вроде `(15, {'checklists.Schedule': 15})`)*.
+4.  Выйди: `exit()`
+Всё, таблица расписания пуста.

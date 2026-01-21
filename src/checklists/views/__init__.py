@@ -1,5 +1,5 @@
-from src.checklists.views.dispatcher import index_dispatcher
-from src.checklists.views.admin_cabinet import (
+from checklists.views.dispatcher import index_dispatcher
+from checklists.views.admin_cabinet import (
     admin_dashboard,
     admin_templates,
     template_preview,
@@ -7,14 +7,15 @@ from src.checklists.views.admin_cabinet import (
     admin_inspection_detail,
     admin_weekly_schedule,
     admin_employees_list,
+    admin_generate_schedule_view,
 )
-from src.checklists.views.employee_cabinet import (
+from checklists.views.employee_cabinet import (
     employee_dashboard,
     inspection_form_view,
     start_inspection_view,
     auto_swap_shift,
 )
-from src.checklists.views.api import (
+from checklists.views.api import (
     upload_photo_ajax,
     delete_photo_ajax,
     save_comment_ajax,
@@ -29,6 +30,7 @@ __all__ = (
     "admin_inspection_detail",
     "admin_weekly_schedule",
     "admin_employees_list",
+    "admin_generate_schedule_view",
     "employee_dashboard",
     "inspection_form_view",
     "start_inspection_view",

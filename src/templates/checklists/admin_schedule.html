@@ -4,84 +4,111 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>🗓 График на неделю</h1>
-    <div class="text-muted">
-        Неделя: {{ week_days.0|date:"d.m" }} - {{ week_days.4|date:"d.m" }}
+    <h1>🗓 График работы</h1>
+
+    <!-- Кнопки генерации -->
+    <div class="d-flex gap-2">
+        <!-- Кнопка 1: Текущая + Следующая неделя -->
+        <form action="{% url 'admin_generate_schedule' %}" method="post">
+            {% csrf_token %}
+            <!-- weeks=1 означает: "Добить эту неделю и заполнить 1 следующую" -->
+            <input type="hidden" name="weeks" value="1">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-gear-wide-connected"></i> Заполнить след. неделю
+            </button>
+        </form>
+
+        <!-- Кнопка 2: Текущая + 2 недели -->
+        <form action="{% url 'admin_generate_schedule' %}" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="weeks" value="2">
+            <button type="submit" class="btn btn-outline-primary">
+                +2 недели
+            </button>
+        </form>
     </div>
+
 </div>
 
-<div class="card shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover mb-0 text-center align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th style="min-width: 200px; text-align: left;">Участок / Шаблон</th>
-                    {% for day in week_days %}
-                        <th style="min-width: 150px;" class="{% if day == today %}table-primary{% endif %}">
-                            {{ day|date:"l" }}<br> <!-- День недели -->
-                            <small class="text-muted">{{ day|date:"d.m" }}</small>
-                        </th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in table_rows %}
-                <tr>
-                    <!-- Колонка 1: Название участка -->
-                    <td class="text-start fw-bold bg-light">
-                        {{ row.template.location.name }}<br>
-                        <small class="text-muted fw-normal">{{ row.template.name }}</small>
-                    </td>
+<!-- НАВИГАЦИЯ ПО ВКЛАДКАМ -->
+<ul class="nav nav-tabs mb-3" id="scheduleTabs" role="tablist">
+    {% for week in weeks_data %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if forloop.first %}active{% endif %}"
+                    id="tab-week-{{ week.index }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#content-week-{{ week.index }}"
+                    type="button" role="tab">
+                {{ week.title }}
+                <span class="text-muted small">({{ week.date_start|date:"d.m" }} - {{ week.date_end|date:"d.m" }})</span>
+            </button>
+        </li>
+    {% endfor %}
+</ul>
 
-                    <!-- Колонки 2-6: Дни недели -->
-                    {% for cell in row.cells %}
-                        {% if cell %}
-                            <!-- ЕСЛИ ЕСТЬ НАЗНАЧЕНИЕ -->
-                            <!-- Определяем цвет ячейки -->
-                            <td class="{% if cell.inspection.is_completed %}bg-success bg-opacity-25{% else %}bg-danger bg-opacity-10{% endif %}">
+<!-- СОДЕРЖИМОЕ ВКЛАДОК -->
+<div class="tab-content" id="scheduleTabsContent">
+    {% for week in weeks_data %}
+        <div class="tab-pane fade {% if forloop.first %}show active{% endif %}"
+             id="content-week-{{ week.index }}" role="tabpanel">
 
-                                <!-- ФИО -->
-                                <div class="fw-bold small">
-                                    {{ cell.inspector.last_name }} {{ cell.inspector.first_name|slice:":1" }}.
-                                </div>
+            <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0 text-center align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width: 200px; text-align: left;">Участок</th>
+                                {% for day in week.week_days %}
+                                    <th style="min-width: 150px;" class="{% if day == today %}table-primary{% endif %}">
+                                        {{ day|date:"l" }}<br>
+                                        <small class="text-muted">{{ day|date:"d.m" }}</small>
+                                    </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in week.table_rows %}
+                            <tr>
+                                <!-- Участок -->
+                                <td class="text-start fw-bold bg-light">
+                                    {{ row.template.location.name }}<br>
+                                    <small class="text-muted fw-normal">{{ row.template.name }}</small>
+                                </td>
 
-                                <!-- Статус (Иконка) -->
-                                <div class="mt-1">
-                                    {% if cell.inspection.is_completed %}
-                                        <a href="{% url 'admin_report_detail' cell.inspection.id %}" class="badge bg-success text-decoration-none">
-                                            ✅ Сдано
-                                        </a>
+                                <!-- Ячейки дней -->
+                                {% for cell in row.cells %}
+                                    {% if cell %}
+                                        <td class="{% if cell.inspection.is_completed %}bg-success bg-opacity-25{% else %}bg-danger bg-opacity-10{% endif %}">
+                                            <div class="fw-bold small">
+                                                {{ cell.inspector.last_name }} {{ cell.inspector.first_name|slice:":1" }}.
+                                            </div>
+                                            <div class="mt-1">
+                                                {% if cell.inspection.is_completed %}
+                                                    <a href="{% url 'admin_report_detail' cell.inspection.id %}" class="badge bg-success text-decoration-none">✅ Сдано</a>
+                                                {% else %}
+                                                    <span class="badge bg-secondary text-dark bg-opacity-10">⏳ Ожидание</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if cell.is_swapped %}
+                                                <div class="mt-1" title="Была замена"><i class="bi bi-arrow-left-right text-primary small"></i></div>
+                                            {% endif %}
+                                        </td>
                                     {% else %}
-                                        <span class="badge bg-secondary text-dark bg-opacity-10">
-                                            ⏳ Ожидание
-                                        </span>
+                                        <td class="bg-light text-muted small">-</td>
                                     {% endif %}
-                                </div>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-                                <!-- Метка автозамены -->
-                                {% if cell.is_swapped %}
-                                    <div class="mt-1" title="Была замена">
-                                        <i class="bi bi-arrow-left-right text-primary small"></i>
-                                    </div>
-                                {% endif %}
-                            </td>
-                        {% else %}
-                            <!-- ЕСЛИ ЯЧЕЙКА ПУСТАЯ -->
-                            <td class="bg-light text-muted small">
-                                -
-                            </td>
-                        {% endif %}
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        </div>
+    {% endfor %}
 </div>
 
-<div class="mt-3 text-end">
-    <a href="/admin/checklists/schedule/" class="btn btn-outline-secondary btn-sm">
-        ⚙️ Редактировать в Django-Admin
-    </a>
+<div class="mt-3 text-end text-muted small">
+    * Таблица отображает только рабочие дни (Пн-Пт).
 </div>
 {% endblock %}
