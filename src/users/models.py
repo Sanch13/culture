@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.core.validators import RegexValidator
 
 from users.managers import CustomUserManager
 
@@ -9,8 +10,21 @@ class User(AbstractUser):
     first_name = models.CharField(verbose_name="Имя", max_length=100, blank=False)
     last_name = models.CharField(verbose_name="Фамилия", max_length=100, blank=False)
     email = models.EmailField("Email", unique=True)
+
+    # --- ОБНОВЛЯЕМ ПОЛЕ ТЕЛЕФОН ---
+    # Создаем правило: "Начинается с +, дальше от 9 до 15 цифр"
+    phone_regex = RegexValidator(
+        regex=r"^\d{9,15}$",
+        message="Телефон должен состоять только из цифр (от 9 до 15). Пример: 375445895647",
+    )
+
     phone = models.CharField(
-        "Телефон", max_length=20, unique=True, blank=True, null=True
+        "Телефон",
+        validators=[phone_regex],
+        max_length=20,
+        unique=True,
+        blank=True,
+        null=True,
     )
     can_perform_inspections = models.BooleanField(
         "Может проводить проверки",
