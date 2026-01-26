@@ -79,7 +79,7 @@ services:
   celery_beat:
     image: culture
     container_name: celery_beat
-    command: uv run celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: uv run celery -A config beat --loglevel=info
     env_file:
       - .env
     depends_on:

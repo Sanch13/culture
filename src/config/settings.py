@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     EMAIL_HOST_USER: str
     EMAIL_HOST_PASSWORD: SecretStr
     DEFAULT_FROM_EMAIL: str
+    ADMIN_EMAIL: str
 
     POSTGRES_USER: str
     POSTGRES_PASSWORD: SecretStr

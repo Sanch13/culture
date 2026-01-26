@@ -16,9 +16,9 @@ app.conf.beat_schedule = {
         # 'schedule': crontab(day_of_week='wednesday', hour=12, minute=38),
         "schedule": crontab(day_of_week="friday", hour=18, minute=00),
     },
-    # # Задача 2: (Пример на будущее) Отправка email
+    # Задача 2: (Пример на будущее) Отправка email
     # 'send_admin_email': {
-    #     'task': 'apps.core.tasks.send_admin_email',
-    #     'schedule': crontab(hour=9, minute=25, day_of_week='mon-fri'),
+    #     'task': 'checklists.tasks.send_admin_email',
+    #     'schedule': crontab(hour=15, minute=18, day_of_week='mon-fri'),
     # },
 }

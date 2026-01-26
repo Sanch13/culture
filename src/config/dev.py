@@ -17,7 +17,7 @@ INSTALLED_APPS = [
 ]
 
 INSTALLED_APPS += [
-    "django_celery_beat",
+    # "django_celery_beat",
     "checklists",
     "users",
 ]
@@ -110,6 +110,7 @@ EMAIL_USE_TLS = settings.EMAIL_USE_TLS
 EMAIL_HOST_USER = settings.EMAIL_HOST_USER
 EMAIL_HOST_PASSWORD = settings.EMAIL_HOST_PASSWORD.get_secret_value()
 DEFAULT_FROM_EMAIL = settings.DEFAULT_FROM_EMAIL
+ADMIN_EMAIL = settings.ADMIN_EMAIL
 
 CELERY_BROKER_URL = settings.CELERY_BROKER_URL
 CELERY_RESULT_BACKEND = settings.CELERY_RESULT_BACKEND
