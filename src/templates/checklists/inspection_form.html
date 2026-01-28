@@ -95,8 +95,7 @@
         <div>
             <h5 class="text-muted mb-0">Чек-лист №{{ inspection.id }}</h5>
             <h2 class="mb-0">{{ inspection.template.name }}</h2>
-            <p class="text-muted">{{ inspection.location_snapshot }} | {{ inspection.date_check
-                }}</p>
+            <p class="text-muted">{{ inspection.location_snapshot }} | {{ inspection.date_check}}</p>
         </div>
         <a href="{% url 'employee_dashboard' %}" class="btn btn-outline-secondary">✕ Закрыть</a>
     </div>
@@ -169,29 +168,33 @@
                             <div class="btn-check-group">
 
                                 <!-- Кнопка ОК -->
-                                <!-- Выбрана, ТОЛЬКО если нет комментариев И нет фото -->
+                                <!-- УБРАЛИ: disabled -->
+                                <!-- УБРАЛИ: Сложные условия checked. Смотрим только в базу. -->
                                 <input type="radio" name="compliant_{{ item.id }}"
                                        id="radio_ok_{{ item.id }}" value="true"
-                                       {% if not item.comment and not item.photos.all %}checked{% endif %}
-                                       disabled> <!-- По умолчанию disabled, JS сам решит, можно ли включить -->
+                                       {% if item.is_compliant %}checked{% endif %}
+                                       onchange="handleStatusChange({{ item.id }}, 'true')">
                                 <label for="radio_ok_{{ item.id }}" class="lbl-yes" id="label_ok_{{ item.id }}">✔ ОК</label>
 
                                 <!-- Кнопка Нарушение -->
-                                <!-- Выбрана, если ЕСТЬ комментарий ИЛИ есть фото -->
                                 <input type="radio" name="compliant_{{ item.id }}"
                                        id="radio_bad_{{ item.id }}" value="false"
-                                       {% if item.comment or item.photos.all %}checked{% endif %}>
+                                       {% if not item.is_compliant %}checked{% endif %}
+                                       onchange="handleStatusChange({{ item.id }}, 'false')">
                                 <label for="radio_bad_{{ item.id }}" class="lbl-no">✖ Нарушение</label>
+
                             </div>
                         </div>
 
                         <!-- Блок 2: Комментарий и Фото -->
                         <div class="col-12 col-md-8">
                             <!-- Текстовое поле -->
-                            <textarea name="comment_{{ item.id }}" id="comment_{{ item.id }}"
-                                      class="form-control mb-2" rows="1"
+                            <textarea name="comment_{{ item.id }}"
+                                      id="comment_{{ item.id }}"
+                                      class="form-control mb-2" rows="2"
                                       placeholder="Опишите нарушение..."
-                                      oninput="updateItemState({{ item.id }})">{{ item.comment }}</textarea>
+                                      oninput="handleInteraction({{ item.id }})"
+                                      onblur="saveCommentAjax(this)">{{ item.comment|default:'' }}</textarea>
 
                             <div class="mt-2">
                                 <!-- Контейнер для фото (используем его длину для подсчета) -->
@@ -201,10 +204,15 @@
                                             <a href="{{ photo.image.url }}" target="_blank">
                                                 <img src="{{ photo.image.url }}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
                                             </a>
+
+                                            <!-- Кнопка удаления (Белый кружок) -->
+                                            <!-- ВАЖНО: Проверь, что внутри deletePhoto стоят ДВА числа через запятую -->
                                             <button type="button"
-                                                    class="btn position-absolute top-0 end-0 m-1 p-0 border-0 bg-transparent"
-                                                    onclick="deletePhoto({{ photo.id }}, {{ item.id }})"> <!-- Передаем item.id! -->
-                                                <i class="bi bi-trash-fill text-danger" style="font-size: 18px; text-shadow: 0 0 3px rgba(255,255,255, 0.9);"></i>
+                                                    class="btn position-absolute top-0 end-0 m-1 p-0 rounded-circle bg-white shadow-sm d-flex justify-content-center align-items-center"
+                                                    style="width: 28px; height: 28px; opacity: 0.9;"
+                                                    title="Удалить фото"
+                                                    onclick="deletePhoto({{ photo.id }}, {{ item.id }})">
+                                                <i class="bi bi-trash-fill text-danger" style="font-size: 14px;"></i>
                                             </button>
                                         </div>
                                     {% endfor %}
@@ -216,7 +224,7 @@
                                     <label class="btn btn-sm btn-outline-primary">
                                         📷 Добавить фото
                                         <input type="file" style="display: none;" multiple accept="image/*"
-                                               onchange="uploadPhoto(this, {{ item.id }})">
+                                            onchange="uploadPhoto(this, {{ item.id }})">
                                     </label>
                                 </div>
                             </div>
@@ -228,21 +236,128 @@
         </div>
         {% endfor %}
 
-        <!-- Футер с кнопками остался тем же -->
+
+        <!-- Плавающий футер с кнопками -->
         <div class="sticky-footer d-flex gap-2 justify-content-end">
-            <button type="submit" name="action" value="save" class="btn btn-secondary">💾 Сохранить
-            </button>
-            <button type="submit" name="action" value="complete"
-                    class="btn btn-success fw-bold px-4"
-                    onclick="return confirm('Завершить проверку?');">✅ Отправить
+<!--            &lt;!&ndash; Кнопка Сохранить (остается как была) &ndash;&gt;-->
+<!--            <button type="submit" name="action" value="save" class="btn btn-secondary">-->
+<!--                💾 Сохранить черновик-->
+<!--            </button>-->
+
+            <!-- НОВАЯ Кнопка Отправить (Вызывает модалку) -->
+            <button type="button" class="btn btn-success fw-bold px-4" onclick="validateAndShowModal()">
+                ✅ Завершить и отправить
             </button>
         </div>
+
+<!--        -->
+<!--        &lt;!&ndash; Футер с кнопками остался тем же &ndash;&gt;-->
+<!--        <div class="sticky-footer d-flex gap-2 justify-content-end">-->
+<!--            <button type="submit" name="action" value="save" class="btn btn-secondary">💾 Сохранить-->
+<!--            </button>-->
+<!--            <button type="submit" name="action" value="complete"-->
+<!--                    class="btn btn-success fw-bold px-4"-->
+<!--                    onclick="return confirm('Завершить проверку?');">✅ Отправить-->
+<!--            </button>-->
+<!--        </div>-->
+<!--        -->
+
     </form>
 </div>
+
+<!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ -->
+<div class="modal fade" id="completeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Подтверждение отправки</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <div class="display-1 text-success mb-3">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <h4 class="mb-3">Завершить проверку?</h4>
+                <p class="text-muted">
+                    Вы уверены, что хотите отправить отчет? <br>
+                    После этого <strong>изменения будут недоступны</strong>.
+                </p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Назад</button>
+
+                <!-- Эта кнопка вызывает JS функцию отправки -->
+                <button type="button" class="btn btn-success px-4 fw-bold" onclick="submitFormComplete()">
+                    Да, отправить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО ОШИБКИ (ВАЛИДАЦИЯ) -->
+<div class="modal fade" id="errorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Ошибка заполнения</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <div class="display-1 text-danger mb-3">
+                    <i class="bi bi-exclamation-octagon"></i>
+                </div>
+                <h4 class="mb-3">Ошибка заполнения!</h4>
+                <p class="text-muted">
+                    Вы отметили пункт как <strong>"Нарушение"</strong> (или прикрепили фото).
+                </p>
+                <p class="fw-bold text-danger">
+                    Обязательно добавьте текстовый комментарий, описывающий проблему.
+                </p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-danger px-4" data-bs-dismiss="modal">
+                    Понятно, сейчас исправлю
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО УДАЛЕНИЯ ФОТО -->
+<div class="modal fade" id="deletePhotoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Удаление фото</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <div class="display-1 text-danger mb-3">
+                    <i class="bi bi-trash"></i>
+                </div>
+                <h4 class="mb-3">Удалить изображение?</h4>
+                <p class="text-muted">
+                    Это действие нельзя отменить. Фотография будет удалена из отчета безвозвратно.
+                </p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Нет, оставить</button>
+
+                <!-- Кнопка подтверждения вызывает функцию выполнения -->
+                <button type="button" class="btn btn-danger px-4 fw-bold" onclick="executePhotoDelete()">
+                    Да, удалить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <!-- ПОДКЛЮЧЕНИЕ СКРИПТОВ BOOTSTRAP (ОБЯЗАТЕЛЬНО) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // 1. Получаем CSRF токен (нужен для защиты AJAX запросов в Django)
+    // 1. Получаем CSRF токен
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -257,65 +372,143 @@
         }
         return cookieValue;
     }
-
     const csrftoken = getCookie('csrftoken');
 
+    // ============================================================
+    // ЛОГИКА СТАТУСОВ И ВЗАИМОДЕЙСТВИЯ
+    // ============================================================
 
-   // === ГЛАВНАЯ ФУНКЦИЯ ЛОГИКИ ===
-    function updateItemState(itemId) {
-        // 1. Получаем элементы
+    // 1. Изменение статуса при клике на кнопки (ОК / Нарушение)
+    function handleStatusChange(itemId, statusValue) {
+        saveStatusAjax(itemId, statusValue);
+        updateVisualState(itemId);
+    }
+
+    // === 2. УМНАЯ ФУНКЦИЯ "ПОМОЩИ" (АВТО-ПЕРЕКЛЮЧЕНИЕ) ===
+    function handleInteraction(itemId) {
+        // 1. Получаем текущие данные
+        const commentField = document.getElementById(`comment_${itemId}`);
+        const photoContainer = document.getElementById(`photo-container-${itemId}`);
+
+        const hasText = commentField.value.trim().length > 0;
+        const hasPhotos = photoContainer.children.length > 0;
+
+        const radioBad = document.getElementById(`radio_bad_${itemId}`);
+        const radioOk = document.getElementById(`radio_ok_${itemId}`);
+
+        // 2. Логика переключения
+        if (hasText || hasPhotos) {
+            // Если есть данные -> Принудительно ставим "Нарушение"
+            if (!radioBad.checked) {
+                radioBad.checked = true;
+                saveStatusAjax(itemId, 'false');
+            }
+        } else {
+            // Если данных НЕТ (пусто) -> Принудительно возвращаем "ОК"
+            if (!radioOk.checked) {
+                radioOk.checked = true;
+                saveStatusAjax(itemId, 'true');
+            }
+        }
+
+        // 3. Обновляем цвета/плейсхолдеры
+        updateVisualState(itemId);
+    }
+
+    // === 3. ЧИСТАЯ ВИЗУАЛИЗАЦИЯ И БЛОКИРОВКА ===
+    function updateVisualState(itemId) {
+        const radioBad = document.getElementById(`radio_bad_${itemId}`);
         const radioOk = document.getElementById(`radio_ok_${itemId}`);
         const labelOk = document.getElementById(`label_ok_${itemId}`);
-        const radioBad = document.getElementById(`radio_bad_${itemId}`);
 
         const commentField = document.getElementById(`comment_${itemId}`);
         const photoContainer = document.getElementById(`photo-container-${itemId}`);
 
-        // 2. Считываем текущее состояние данных
-        const photoCount = photoContainer.children.length;
-        const commentText = commentField.value.trim();
-        const hasData = (photoCount > 0 || commentText.length > 0);
+        // Проверяем наличие данных
+        const hasText = commentField.value.trim().length > 0;
+        const hasPhotos = photoContainer.children.length > 0;
+        const hasData = hasText || hasPhotos;
 
-        // --- ЛОГИКА 1: АВТО-ПЕРЕКЛЮЧЕНИЕ СТАТУСА ---
+        // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: БЛОКИРОВКА КНОПКИ "ОК" ---
         if (hasData) {
-            // Если есть хоть что-то -> Это Нарушение
-            radioBad.checked = true;
-
-            // Блокируем кнопку ОК (нельзя нажать ОК, пока есть данные)
+            // Если есть улики -> Кнопка "ОК" умирает
             radioOk.disabled = true;
-            labelOk.classList.add('disabled-state');
-        } else {
-            // Если все чисто -> Это ОК
-            radioOk.checked = true;
+            labelOk.classList.add('disabled-state'); // Делаем бледной
 
-            // Разблокируем кнопку ОК (хотя она и так нажата)
+            // Если вдруг (каким-то чудом) стояла галочка на ОК -> переключаем на Нарушение
+            if (radioOk.checked) {
+                radioBad.checked = true;
+                saveStatusAjax(itemId, 'false');
+            }
+        } else {
+            // Если данных нет -> Кнопка "ОК" оживает
             radioOk.disabled = false;
             labelOk.classList.remove('disabled-state');
         }
+        // --------------------------------------------------
 
-        // --- ЛОГИКА 2: ВАЛИДАЦИЯ (ФОТО ТРЕБУЕТ КОММЕНТАРИЯ) ---
-        if (photoCount > 0) {
-            // Если есть фото, комментарий ОБЯЗАТЕЛЕН
-            commentField.required = true;
-            commentField.placeholder = "При наличии фото описание обязательно!";
-
-            // Визуальная подсветка ошибки, если текста нет
-            if (commentText.length === 0) {
-                commentField.classList.add('is-invalid'); // Класс Bootstrap (красная рамка)
-            } else {
-                commentField.classList.remove('is-invalid');
-            }
+        // Настройка плейсхолдеров (как и раньше)
+        if (radioBad.checked) {
+            commentField.placeholder = "Опишите нарушение (обязательно)...";
         } else {
-            // Если фото нет, комментарий желателен, но не обязателен (для статуса Нарушение)
-            // Но в твоем ТЗ "позволяем оставить комментарий но не делать фото"
-            commentField.required = false;
-            commentField.placeholder = "Опишите нарушение...";
+            commentField.placeholder = "Комментарий (необязательно)...";
             commentField.classList.remove('is-invalid');
         }
     }
 
+    // 4. Инициализация при загрузке страницы
+    document.addEventListener("DOMContentLoaded", function() {
+        // Проходим по всем кнопкам "Нарушение", чтобы выставить правильные плейсхолдеры
+        const allBadButtons = document.querySelectorAll('[id^="radio_bad_"]');
+        allBadButtons.forEach(btn => {
+            const itemId = btn.id.split('_')[2];
+            updateVisualState(itemId);
+        });
+    });
 
-    // === ОБНОВЛЕННАЯ ЗАГРУЗКА (вызывает updateItemState) ===
+    // ============================================================
+    // AJAX ЗАПРОСЫ
+    // ============================================================
+
+    function saveStatusAjax(itemId, isCompliant) {
+        const url = `/api/save-status/${itemId}/`;
+        const formData = new FormData();
+        formData.append('is_compliant', isCompliant);
+        fetch(url, { method: 'POST', headers: {'X-CSRFToken': csrftoken}, body: formData });
+    }
+
+    function saveCommentAjax(textarea) {
+        // Получаем ID из названия id="comment_15" -> "15"
+        // Если вдруг id сложный, используем split и берем последний элемент
+        const parts = textarea.id.split('_');
+        const itemId = parts[parts.length - 1];
+
+        const url = `/api/save-comment/${itemId}/`;
+        const formData = new FormData();
+        formData.append('comment', textarea.value);
+
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken},
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                console.log(`Комментарий к пункту ${itemId} успешно сохранен.`);
+
+                // Визуальный эффект: Зеленая рамка на 1 секунду
+                textarea.classList.add('border-success');
+                textarea.classList.add('shadow-sm');
+                setTimeout(() => {
+                    textarea.classList.remove('border-success');
+                    textarea.classList.remove('shadow-sm');
+                }, 1000);
+            } else {
+                console.error('Ошибка сервера при сохранении комментария');
+                textarea.classList.add('border-danger');
+            }
+        }).catch(error => console.error('Ошибка сети:', error));
+    }
+
     function uploadPhoto(inputElement, itemId) {
         const files = inputElement.files;
         if (files.length === 0) return;
@@ -327,130 +520,122 @@
 
         const url = `/api/upload-photo/${itemId}/`;
 
-        fetch(url, {
-            method: 'POST',
-            headers: {'X-CSRFToken': csrftoken},
-            body: formData
-        })
+        fetch(url, { method: 'POST', headers: {'X-CSRFToken': csrftoken}, body: formData })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'ok') {
                 const container = document.getElementById(`photo-container-${itemId}`);
                 data.photos.forEach(photo => {
+                    // ... (код генерации HTML картинки остается тем же) ...
                     const html = `
                         <div class="position-relative photo-wrapper" id="photo-wrapper-${photo.id}">
                             <a href="${photo.url}" target="_blank">
                                 <img src="${photo.url}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
                             </a>
-                            <button type="button"
-                                    class="btn position-absolute top-0 end-0 m-1 p-0 border-0 bg-transparent"
-                                    onclick="deletePhoto(${photo.id}, ${itemId})">
-                                <i class="bi bi-trash-fill text-danger" style="font-size: 18px; text-shadow: 0 0 3px rgba(255,255,255, 0.9);"></i>
+                            <button type="button" class="btn position-absolute top-0 end-0 m-1 p-0 rounded-circle bg-white shadow-sm d-flex justify-content-center align-items-center" style="width: 28px; height: 28px; opacity: 0.9;" onclick="deletePhoto(${photo.id}, ${itemId})">
+                                <i class="bi bi-trash-fill text-danger" style="font-size: 14px;"></i>
                             </button>
-                        </div>
-                    `;
+                        </div>`;
                     container.insertAdjacentHTML('beforeend', html);
                 });
 
-                // ВАЖНО: Обновляем состояние кнопок (заблокировать ОК)
-                updateItemState(itemId);
-
                 inputElement.value = '';
+
+                // --- ВАЖНОЕ ИЗМЕНЕНИЕ ---
+                // Вызываем проверку только ТЕПЕРЬ, когда фото уже на экране
+                handleInteraction(itemId);
             }
         });
     }
 
-    // === ОБНОВЛЕННОЕ УДАЛЕНИЕ (принимает itemId и вызывает updateItemState) ===
+    // ============================================================
+    // УДАЛЕНИЕ ФОТО
+    // ============================================================
+    const deletePhotoModal = new bootstrap.Modal(document.getElementById('deletePhotoModal'));
+    let photoIdToDelete = null;
+    let itemIdToUpdate = null;
+
     function deletePhoto(photoId, itemId) {
-        if (!confirm('Удалить фото?')) return;
+        photoIdToDelete = photoId;
+        itemIdToUpdate = itemId; // Теперь мы сохраняем ID вопроса
+        deletePhotoModal.show();
+    }
 
-        const url = `/api/delete-photo/${photoId}/`;
+    function executePhotoDelete() {
+        if (!photoIdToDelete) return;
 
-        fetch(url, {
-            method: 'POST',
-            headers: {'X-CSRFToken': csrftoken}
-        })
+        const url = `/api/delete-photo/${photoIdToDelete}/`;
+
+        fetch(url, { method: 'POST', headers: {'X-CSRFToken': csrftoken} })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'ok') {
-                const wrapper = document.getElementById(`photo-wrapper-${photoId}`);
+                // 1. Удаляем элемент
+                const wrapper = document.getElementById(`photo-wrapper-${photoIdToDelete}`);
                 if (wrapper) wrapper.remove();
 
-                // ВАЖНО: Обновляем состояние (разблокировать ОК, если фото кончились)
-                updateItemState(itemId);
+                deletePhotoModal.hide();
+
+                // 2. ВАЖНО: Проверяем, нужно ли вернуть статус "ОК"
+                // (переменная itemIdToUpdate должна была быть сохранена при клике на урну)
+                if (itemIdToUpdate) {
+                    handleInteraction(itemIdToUpdate);
+                }
             }
         });
     }
 
-    // === АВТОСОХРАНЕНИЕ КОММЕНТАРИЯ ===
-    // Находим все текстовые поля и вешаем обработчик "blur" (потеря фокуса)
-    document.addEventListener("DOMContentLoaded", function() {
-        const textAreas = document.querySelectorAll('textarea[name^="comment_"]');
+    // ============================================================
+    // ВАЛИДАЦИЯ И ОТПРАВКА
+    // ============================================================
+    const completeModal = new bootstrap.Modal(document.getElementById('completeModal'));
+    const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
 
-        textAreas.forEach(area => {
-            area.addEventListener('blur', function() {
-                // Если текст изменился - отправляем его на сервер
-                saveCommentAjax(this);
-            });
-        });
+    function validateAndShowModal() {
+        const items = document.querySelectorAll('[id^="radio_bad_"]');
+        let hasError = false;
+        let firstErrorElement = null;
 
-        // ... твой старый код инициализации кнопок ...
-    });
+        items.forEach(radioBad => {
+            if (radioBad.checked) { // Если выбрано Нарушение
+                const itemId = radioBad.id.split('_')[2];
+                const commentField = document.getElementById(`comment_${itemId}`);
+                const hasText = commentField.value.trim().length > 0;
 
-    function saveCommentAjax(textarea) {
-        const itemId = textarea.id.split('_')[1];
-        const text = textarea.value;
-        const url = `/api/save-comment/${itemId}/`; // Нам нужно создать этот URL
-
-        const formData = new FormData();
-        formData.append('comment', text);
-
-        // Отправляем в фоне
-        fetch(url, {
-            method: 'POST',
-            headers: {'X-CSRFToken': csrftoken},
-            body: formData
-        }).then(response => {
-            if (response.ok) {
-                console.log('Комментарий сохранен');
-                textarea.style.borderColor = "#198754"; // Зеленая рамка - успех
-                setTimeout(() => textarea.style.borderColor = "", 1000);
+                // ПРАВИЛО: Нарушение = Обязательный комментарий
+                if (!hasText) {
+                    commentField.classList.add('is-invalid'); // Красная рамка
+                    hasError = true;
+                    if (!firstErrorElement) firstErrorElement = commentField;
+                } else {
+                    commentField.classList.remove('is-invalid');
+                }
             }
         });
-    }
 
-    // === БЛОК ИНИЦИАЛИЗАЦИИ ===
-    // Запускается один раз, когда вся страница загружена
-    document.addEventListener("DOMContentLoaded", function() {
-        // 1. Ищем все радиокнопки "ОК", чтобы понять, какие ID вопросов есть на странице
-        // (Они имеют id вида "radio_ok_15", "radio_ok_23" и т.д.)
-        const allOkButtons = document.querySelectorAll('[id^="radio_ok_"]');
-
-        allOkButtons.forEach(btn => {
-            // 2. Вытаскиваем ID из названия (например, "radio_ok_15" -> "15")
-            const itemId = btn.id.split('_')[2];
-
-            // 3. Принудительно запускаем проверку состояния
-            updateItemState(itemId);
-        });
-    });
-
-    // === ЗАЩИТА ОТ ОТПРАВКИ НЕВАЛИДНОЙ ФОРМЫ ===
-    document.getElementById('inspectionForm').addEventListener('submit', function(event) {
-        // Ищем все поля комментариев, которые помечены как invalid (красная рамка из функции выше)
-        const invalidFields = document.querySelectorAll('textarea.is-invalid');
-
-        if (invalidFields.length > 0) {
-            // Отменяем отправку
-            event.preventDefault();
-
-            // Скроллим к первой ошибке
-            invalidFields[0].scrollIntoView({behavior: "smooth", block: "center"});
-            invalidFields[0].focus();
-
-            alert("Ошибка! Если вы прикрепили фото, вы ОБЯЗАНЫ добавить описание нарушения.");
+        if (hasError) {
+            firstErrorElement.scrollIntoView({behavior: "smooth", block: "center"});
+            // Показываем обновленный текст ошибки
+            errorModal.show();
+            // Ставим фокус в поле после закрытия окна
+            document.getElementById('errorModal').addEventListener('hidden.bs.modal', function () {
+                firstErrorElement.focus();
+            }, {once: true});
+            return;
         }
-    });
+
+        completeModal.show();
+    }
+
+    function submitFormComplete() {
+        const form = document.getElementById('inspectionForm');
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'action';
+        hiddenInput.value = 'complete';
+        form.appendChild(hiddenInput);
+        form.submit();
+    }
 </script>
 </body>
 </html>

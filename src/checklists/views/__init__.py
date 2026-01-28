@@ -19,6 +19,7 @@ from checklists.views.api import (
     upload_photo_ajax,
     delete_photo_ajax,
     save_comment_ajax,
+    save_status_ajax,
 )
 
 __all__ = (
@@ -38,4 +39,5 @@ __all__ = (
     "upload_photo_ajax",
     "delete_photo_ajax",
     "save_comment_ajax",
+    "save_status_ajax",
 )

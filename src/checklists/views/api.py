@@ -59,3 +59,26 @@ def save_comment_ajax(request, item_id):
     # но лучше оставить это на совести пользователя или UI.
     item.save()
     return JsonResponse({"status": "ok"})
+
+
+@employee_required
+@require_POST
+def save_status_ajax(request, item_id):
+    """
+    Автосохранение галочки (ОК/Нарушение).
+    """
+    item = get_object_or_404(
+        InspectionItem, id=item_id, inspection__inspector=request.user
+    )
+
+    # Получаем значение 'true' или 'false'
+    status_str = request.POST.get("is_compliant")
+
+    # Преобразуем в булево
+    if status_str == "true":
+        item.is_compliant = True
+    elif status_str == "false":
+        item.is_compliant = False
+
+    item.save()
+    return JsonResponse({"status": "ok"})

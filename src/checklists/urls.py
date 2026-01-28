@@ -45,5 +45,10 @@ urlpatterns = [
         views.save_comment_ajax,
         name="save_comment_ajax",
     ),
+    path(
+        "api/save-status/<int:item_id>/",
+        views.save_status_ajax,
+        name="save_status_ajax",
+    ),
     path("api/swap/<int:schedule_id>/", views.auto_swap_shift, name="auto_swap_shift"),
 ]
