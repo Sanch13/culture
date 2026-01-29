@@ -50,5 +50,10 @@ urlpatterns = [
         views.save_status_ajax,
         name="save_status_ajax",
     ),
+    path(
+        "api/toggle-permission/<int:user_id>/",
+        views.toggle_employee_permission,
+        name="toggle_employee_permission",
+    ),
     path("api/swap/<int:schedule_id>/", views.auto_swap_shift, name="auto_swap_shift"),
 ]

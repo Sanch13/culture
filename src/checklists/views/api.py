@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
@@ -6,7 +7,9 @@ from checklists.models import (
     ViolationPhoto,
     InspectionItem,
 )
-from checklists.decorators import employee_required
+from checklists.decorators import employee_required, admin_required
+
+User = get_user_model()
 
 
 @employee_required
@@ -82,3 +85,18 @@ def save_status_ajax(request, item_id):
 
     item.save()
     return JsonResponse({"status": "ok"})
+
+
+@admin_required
+@require_POST
+def toggle_employee_permission(request, user_id):
+    """
+    Переключает право 'can_perform_inspections' у сотрудника.
+    """
+    user = get_object_or_404(User, id=user_id)
+
+    # Меняем на противоположное
+    user.can_perform_inspections = not user.can_perform_inspections
+    user.save()
+
+    return JsonResponse({"status": "ok", "new_state": user.can_perform_inspections})

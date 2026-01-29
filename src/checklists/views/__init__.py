@@ -20,6 +20,7 @@ from checklists.views.api import (
     delete_photo_ajax,
     save_comment_ajax,
     save_status_ajax,
+    toggle_employee_permission,
 )
 
 __all__ = (
@@ -40,4 +41,5 @@ __all__ = (
     "delete_photo_ajax",
     "save_comment_ajax",
     "save_status_ajax",
+    "toggle_employee_permission",
 )

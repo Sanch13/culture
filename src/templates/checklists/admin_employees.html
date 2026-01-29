@@ -1,6 +1,36 @@
 {% extends 'base_admin.html' %}
+{% load phone_filter %}
 
 {% block title %}Сотрудники{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 1. БАЗОВОЕ СОСТОЯНИЕ = ВЫКЛЮЧЕНО (Красный фон + Белый круг) */
+    .form-check-input.perm-switch {
+        background-color: #dc3545 !important; /* Force Red */
+        border-color: #dc3545 !important;
+        opacity: 1 !important; /* Убираем полупрозрачность, если есть */
+
+        /* Рисуем БЕЛЫЙ круг (fill='%23fff' = #fff) */
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e") !important;
+    }
+
+    /* 2. АКТИВНОЕ СОСТОЯНИЕ = ВКЛЮЧЕНО (Зеленый фон + Белый круг) */
+    .form-check-input.perm-switch:checked {
+        background-color: #198754 !important; /* Force Green */
+        border-color: #198754 !important;
+
+        /* Картинка наследуется, но на всякий случай можно оставить ту же */
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e") !important;
+    }
+
+    /* 3. Убираем синюю тень при фокусе/нажатии */
+    .form-check-input.perm-switch:focus {
+        box-shadow: none !important;
+        border-color: inherit !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -45,14 +75,20 @@
                     </td>
 
                     <!-- Телефон -->
-                    <td>{{ employee.phone|default:"-" }}</td>
+                    <td>{{ employee.phone|format_phone|default:"-" }}</td>
 
                     <!-- Роль -->
                     <td>
                         {% if employee.role == 'admin' %}
-                            <span class="badge bg-danger">Администратор</span>
+                        <span class="badge bg-danger">Администратор</span>
+
+                        {% elif employee.role == 'manager' %}
+                        <!-- Новый бейдж для начальника (например, темно-синий/фиолетовый) -->
+                        <span class="badge bg-info text-dark">Нач. участка</span>
+
                         {% elif employee.role == 'master' %}
                             <span class="badge bg-primary">Мастер</span>
+
                         {% else %}
                             <span class="badge bg-secondary">Сотрудник</span>
                         {% endif %}
@@ -67,17 +103,19 @@
                         {% endif %}
                     </td>
 
-                    <!-- Допуск (Новый дизайн) -->
-                    <td class="text-center">
-                        {% if employee.can_perform_inspections %}
-                            <span class="badge bg-success">
-                                <i class="bi bi-check-circle-fill"></i> Есть допуск
-                            </span>
-                        {% else %}
-                            <span class="badge bg-danger bg-opacity-75">
-                                <i class="bi bi-x-circle-fill"></i> Нет права
-                            </span>
-                        {% endif %}
+                    <td data-label="Допуск" class="text-md-center">
+                        <!-- Переключатель (Switch) -->
+                        <div class="form-check form-switch d-flex justify-content-end justify-content-md-center">
+                        <!-- ДОБАВЛЕН КЛАСС perm-switch -->
+                        <input class="form-check-input perm-switch" type="checkbox" role="switch"
+                               id="permSwitch_{{ employee.id }}"
+                               {% if employee.can_perform_inspections %}checked{% endif %}
+                               onchange="togglePermission({{ employee.id }}, this)">
+
+                        <label class="form-check-label ms-2 d-md-none" for="permSwitch_{{ employee.id }}">
+                            Допуск
+                        </label>
+                        </div>
                     </td>
 
                 </tr>
@@ -94,4 +132,56 @@
     </div>
 </div>
 
+<script>
+    // Функция получения CSRF токена (оставляем как есть)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    function togglePermission(userId, checkbox) {
+        const url = `/api/toggle-permission/${userId}/`;
+
+        // Блокируем, чтобы пользователь не кликал 10 раз подряд
+        checkbox.disabled = true;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken}
+        })
+        .then(response => response.json())
+        .then(data => {
+            checkbox.disabled = false;
+
+            if (data.status === 'ok') {
+                console.log(`Права пользователя ${userId} изменены на: ${data.new_state}`);
+                // ВАЖНО: Мы НЕ меняем цвета здесь вручную.
+                // Так как checkbox.checked уже изменился по клику,
+                // CSS селектор .perm-switch:checked сам покрасит его в зеленый,
+                // а .perm-switch (без checked) — в красный.
+            } else {
+                // Если сервер вернул ошибку логики
+                checkbox.checked = !checkbox.checked; // Возвращаем переключатель назад
+                alert('Ошибка при изменении прав: ' + (data.message || 'Неизвестная ошибка'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            checkbox.disabled = false;
+            checkbox.checked = !checkbox.checked; // Возвращаем переключатель назад при ошибке сети
+            alert('Ошибка сети');
+        });
+    }
+</script>
 {% endblock %}

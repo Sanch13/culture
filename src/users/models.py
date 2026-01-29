@@ -34,13 +34,16 @@ class User(AbstractUser):
 
     ROLE_WORKER = "worker"
     ROLE_MASTER = "master"
+    ROLE_MANAGER = "manager"  # <--- 1. НОВАЯ КОНСТАНТА
     ROLE_ADMIN = "admin"
 
     ROLE_CHOICES = [
         (ROLE_WORKER, "Сотрудник"),
         (ROLE_MASTER, "Мастер участка"),
+        (ROLE_MANAGER, "Начальник участка"),  # <--- 2. НОВЫЙ ВАРИАНТ
         (ROLE_ADMIN, "Администратор"),
     ]
+
     role = models.CharField(
         "Роль", max_length=20, choices=ROLE_CHOICES, default=ROLE_WORKER
     )

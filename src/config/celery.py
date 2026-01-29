@@ -21,4 +21,9 @@ app.conf.beat_schedule = {
     #     'task': 'checklists.tasks.send_admin_email',
     #     'schedule': crontab(hour=15, minute=18, day_of_week='mon-fri'),
     # },
+    # Задача 3: Ежедневная отправка email с напоминанием о проверке (9 утра)
+    "send_inspection_reminders": {
+        "task": "checklists.tasks.send_inspection_reminders",
+        "schedule": crontab(hour=9, minute=0, day_of_week="mon-fri"),
+    },
 }

@@ -7,7 +7,7 @@ from django.conf import settings
 from celery import shared_task
 
 from checklists.utils import send_message
-from checklists.services import generate_schedule
+from checklists.services import generate_schedule, prepare_daily_notifications
 
 
 @shared_task
@@ -44,6 +44,38 @@ def send_admin_email(text=None):
         message["From"] = settings.EMAIL_HOST_USER
         message["To"] = settings.ADMIN_EMAIL
         message.set_content(text_body)
+
+        send_message(message=message)
+
+        # logger.info("Email успешно отправлен админу")
+        # logger.info("---------End---------send_admin_email()---------")
+    except Exception:
+        # logger.exception(f"Ошибка: {e}")
+        pass
+
+
+@shared_task
+def send_inspection_reminders():
+    """Ежедневная отправка email с напоминанием о проверке (9 утра)"""
+    # Получаем готовые данные
+    emails_to_send = prepare_daily_notifications()
+
+    for email_data in emails_to_send:
+        # Тут вызываешь свою уже готовую функцию отправки
+        send_email.delay(email_data)
+        print(f"Отправка письма на {email_data['recipient_email']}...")  # Заглушка
+
+    return f"Обработано {len(emails_to_send)} уведомлений."
+
+
+@shared_task
+def send_email(email_data):
+    try:
+        message = EmailMessage()
+        message["Subject"] = email_data["subject"]
+        message["From"] = settings.EMAIL_HOST_USER
+        message["To"] = email_data["recipient_email"]
+        message.set_content(email_data["body"])
 
         send_message(message=message)
 

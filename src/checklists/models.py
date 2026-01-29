@@ -15,6 +15,26 @@ class Location(models.Model):
 
     name = models.CharField("Название участка", max_length=300)
 
+    # 1. Начальник: показываем ТОЛЬКО тех, у кого роль 'manager'
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="managed_locations",
+        verbose_name="Начальник участка",
+        limit_choices_to={"role": "manager"},  # <--- ФИЛЬТР
+    )
+
+    # 2. Мастера: показываем ТОЛЬКО тех, у кого роль 'master'
+    masters = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="mastered_locations",
+        verbose_name="Мастера участка",
+        limit_choices_to={"role": "master"},  # <--- ФИЛЬТР
+    )
+
     def __str__(self):
         return self.name
 

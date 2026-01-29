@@ -4,6 +4,7 @@ import holidays
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+
 from checklists.models import (
     Inspection,
     InspectionItem,
@@ -11,6 +12,7 @@ from checklists.models import (
     ChecklistTemplate,
     SwapLog,
 )
+from checklists.utils import format_phone_number
 
 User = get_user_model()
 
@@ -222,3 +224,82 @@ def perform_auto_swap(schedule_item, reason):
         True,
         f"Обмен выполнен. Вы перенесены на {new_date}. Вместо вас выйдет {target_user.last_name}.",
     )
+
+
+def prepare_daily_notifications(target_date=None):
+    """
+    Собирает данные для рассылки уведомлений на заданную дату.
+    """
+    if target_date is None:
+        target_date = datetime.date.today()
+
+    # 1. Ищем расписание на сегодня.
+    # Оптимизация (Join): сразу тянем данные инспектора, шаблона, участка и начальника участка
+    schedules = (
+        Schedule.objects.filter(date=target_date)
+        .select_related(
+            "inspector",
+            "template",
+            "template__location",
+            "template__location__manager",  # Сразу достаем начальника
+        )
+        .prefetch_related(
+            # Оптимизация (Prefetch): отдельно эффективно загружаем список мастеров
+            "template__location__masters"
+        )
+    )
+
+    notifications_data = []
+
+    for item in schedules:
+        inspector = item.inspector
+        location = item.template.location
+
+        # Если у инспектора нет email, пропускаем (логируем ошибку в реальном проекте)
+        if not inspector.email:
+            continue
+
+        # Собираем данные начальника
+        manager_info = "Не назначен"
+        if location.manager:
+            man_name = f"{location.manager.last_name} {location.manager.first_name}"
+            man_phone = format_phone_number(location.manager.phone) or "нет телефона"
+            manager_info = f"{man_name} (Тел: {man_phone})"
+
+        # Собираем данные мастеров
+        masters_list = []
+        for master in location.masters.all():
+            m_name = f"{master.last_name} {master.first_name}"
+            m_phone = format_phone_number(master.phone) or "нет телефона"
+            masters_list.append(f"- {m_name} (Тел: {m_phone})")
+
+        masters_str = (
+            "\n".join(masters_list) if masters_list else "Нет назначенных мастеров"
+        )
+
+        # Формируем тело письма
+        email_body = (
+            f"Здравствуйте, {inspector.last_name} {inspector.first_name}!\n\n"
+            f"На {target_date.strftime('%d.%m.%Y')} вам назначена проверка.\n"
+            f"Участок: {location.name}\n"
+            f"Шаблон чек-листа: {item.template.name}\n\n"
+            f"--- КОНТАКТЫ УЧАСТКА ---\n"
+            f"Начальник:\n{manager_info}\n\n"
+            f"Мастера:\n{masters_str}\n\n"
+            f"Пожалуйста, не забудьте заполнить отчет в системе."
+        )
+
+        # Добавляем в список задач на отправку
+        notifications_data.append(
+            {
+                "recipient_email": inspector.email,
+                "subject": f"Напоминание о проверке: {location.name}",
+                "body": email_body,
+            }
+        )
+
+    # Подмена для теста ПОТОМ удалить !!!
+    for item in notifications_data:
+        item["recipient_email"] = "a.zubchyk@miran-bel.com"
+
+    return notifications_data

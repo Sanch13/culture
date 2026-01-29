@@ -20,20 +20,10 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             border: none;
         }
-
-        /* Дополнительные стили, если понадобятся */
-        {
-        %
-        block
-        extra_css
-        %
-        }
-        {
-        %
-        endblock
-        %
-        }
     </style>
+
+    {% block extra_css %}
+    {% endblock %}
 </head>
 <body>
 
