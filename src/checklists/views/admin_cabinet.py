@@ -14,6 +14,7 @@ from checklists.models import (
     ChecklistTemplate,
     Inspection,
     Schedule,
+    SwapLog,
 )
 
 User = get_user_model()
@@ -216,3 +217,19 @@ def admin_generate_schedule_view(request):
         f"по {target_end_date.strftime('%d.%m')}. {result_message}",
     )
     return redirect("admin_schedule")
+
+
+@admin_required
+def admin_swap_log(request):
+    """
+    Журнал замен смен.
+    """
+    # Сортируем: новые сверху (-created_at)
+    swaps = SwapLog.objects.select_related("requestor", "target_user").order_by(
+        "-created_at"
+    )
+
+    context = {
+        "swaps": swaps,
+    }
+    return render(request, "checklists/admin_swaps.html", context)

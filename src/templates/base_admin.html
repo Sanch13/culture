@@ -71,6 +71,13 @@
                 </li>
 
                 <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'admin_swaps' %}active{% endif %}"
+                       href="{% url 'admin_swaps' %}">
+                        🔄 Журнал замен
+                    </a>
+                </li>
+
+                <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'admin_employees' %}active{% endif %}"
                        href="{% url 'admin_employees' %}">
                         👥 Сотрудники

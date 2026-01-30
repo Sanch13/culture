@@ -8,6 +8,7 @@ from checklists.views.admin_cabinet import (
     admin_weekly_schedule,
     admin_employees_list,
     admin_generate_schedule_view,
+    admin_swap_log,
 )
 from checklists.views.employee_cabinet import (
     employee_dashboard,
@@ -33,6 +34,7 @@ __all__ = (
     "admin_weekly_schedule",
     "admin_employees_list",
     "admin_generate_schedule_view",
+    "admin_swap_log",
     "employee_dashboard",
     "inspection_form_view",
     "start_inspection_view",

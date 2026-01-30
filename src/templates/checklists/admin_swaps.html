@@ -1,0 +1,79 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Журнал замен{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🔄 Журнал замен / переносов</h1>
+    <span class="badge bg-secondary">Всего записей: {{ swaps.count }}</span>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 15%">Дата запроса</th>
+                    <th style="width: 20%">Инициатор</th>
+                    <th style="width: 10%">Тип</th>
+                    <th style="width: 25%">Изменения дат</th>
+                    <th style="width: 30%">Причина</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in swaps %}
+                <tr>
+                    <!-- Дата создания записи -->
+                    <td class="text-muted small">
+                        {{ log.created_at|date:"d.m.Y H:i" }}
+                    </td>
+
+                    <!-- Инициатор (Кто запросил) -->
+                    <td>
+                        <div class="fw-bold">{{ log.requestor.get_full_name }}</div>
+                        <div class="small text-muted">{{ log.requestor.email }}</div>
+                    </td>
+
+                    <!-- Тип действия -->
+                    <td>
+                        {% if log.requestor == log.target_user %}
+                            <span class="badge bg-warning text-dark">Перенос</span>
+                        {% else %}
+                            <span class="badge bg-danger">Замена</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Детали смены дат -->
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-decoration-line-through text-muted">{{ log.source_date|date:"d.m.Y" }}</span>
+                            <i class="bi bi-arrow-right text-primary"></i>
+                            <span class="fw-bold text-success">{{ log.target_date|date:"d.m.Y" }}</span>
+                        </div>
+
+                        <!-- Если заменили на другого человека -->
+                        {% if log.requestor != log.target_user %}
+                            <div class="small text-muted mt-1">
+                                На кого: <strong>{{ log.target_user.get_full_name }}</strong>
+                            </div>
+                        {% endif %}
+                    </td>
+
+                    <!-- Причина -->
+                    <td>
+                        <em class="text-muted">"{{ log.reason }}"</em>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        <h4 class="display-6">📭</h4>
+                        Записей о заменах пока нет.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

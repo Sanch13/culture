@@ -19,7 +19,7 @@ handler500 = custom_500
 
 
 urlpatterns = [
-    path("auth/", include("users.urls")),
+    path("auth/", include("users.urls", namespace="users")),
     path("", include("checklists.urls")),
     path("admin/", admin.site.urls),
     path("accounts/", include("django.contrib.auth.urls")),

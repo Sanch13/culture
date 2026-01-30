@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Кабинет{% endblock %} | CheckSystem</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Иконки -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <style>
+        body { padding-top: 70px; } /* Отступ для фиксированного меню */
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-light">
+
+<!-- МЕНЮ НАВИГАЦИИ (NAVBAR) -->
+<nav class="navbar navbar-expand-md navbar-dark bg-primary fixed-top shadow-sm">
+    <div class="container">
+        <!-- Логотип -->
+        <a class="navbar-brand fw-bold" href="{% url 'employee_dashboard' %}">
+            📱 CheckSystem
+        </a>
+
+        <!-- Кнопка "Гамбургер" для мобильных -->
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#userNavbar">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="userNavbar">
+            <!-- Левая часть меню -->
+            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'user_dashboard' %}active fw-bold{% endif %}"
+                       href="{% url 'employee_dashboard' %}">
+                       📅 Мои проверки
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'profile_edit' %}active fw-bold{% endif %}"
+                       href="{% url 'users:profile_edit' %}">
+                       👤 Профиль
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Правая часть (Имя + Выход) -->
+            <div class="d-flex align-items-center text-white gap-3">
+                <span class="d-none d-md-inline small">
+                    {{ user.first_name }} {{ user.last_name }}
+                </span>
+
+                <form action="{% url 'users:logout' %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-light text-primary fw-bold">
+                        Выйти
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- ОСНОВНОЙ КОНТЕНТ -->
+<div class="container">
+
+    <!-- Блок сообщений (Alerts) -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show mt-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Сюда вставляется контент дочерних страниц -->
+    {% block content %}
+    {% endblock %}
+
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

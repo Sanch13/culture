@@ -1,6 +1,8 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from users.models import User
+
+User = get_user_model()
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -77,3 +79,39 @@ class CustomAuthenticationForm(AuthenticationForm):
     password = forms.CharField(
         label="Пароль", widget=forms.PasswordInput(attrs={"class": "form-control"})
     )
+
+
+class UserProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        # Разрешаем менять только эти поля
+        fields = ["first_name", "last_name", "phone"]
+
+        widgets = {
+            "first_name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Ваше имя"}
+            ),
+            "last_name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Ваша фамилия"}
+            ),
+            "phone": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Например: 375291234567"}
+            ),
+        }
+        labels = {
+            "first_name": "Имя",
+            "last_name": "Фамилия",
+            "phone": "Мобильный телефон",
+        }
+
+    def clean_phone(self):
+        """
+        Дополнительная очистка телефона, если нужно.
+        Например, можно запретить менять телефон на уже занятый другим юзером (хотя unique=True в модели это и так сделает).
+        """
+        phone = self.cleaned_data.get("phone")
+        if not phone:
+            return None
+        # Можно тут вызвать наш format_phone_number, чтобы сохранять в едином формате,
+        # но пока оставим как есть, пусть валидатор модели работает.
+        return phone

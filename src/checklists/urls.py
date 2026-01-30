@@ -19,8 +19,10 @@ urlpatterns = [
         views.admin_generate_schedule_view,
         name="admin_generate_schedule",
     ),
+    path("cabinet/swaps/", views.admin_swap_log, name="admin_swaps"),
     # Предпросмотр конкретного шаблона
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
+    # Кабинет пользователя
     path("my-checks/", views.employee_dashboard, name="employee_dashboard"),
     path(
         "start/<int:template_id>/", views.start_inspection_view, name="start_inspection"
@@ -30,6 +32,7 @@ urlpatterns = [
         views.inspection_form_view,
         name="inspection_form",
     ),
+    # API
     path(
         "api/upload-photo/<int:item_id>/",
         views.upload_photo_ajax,
