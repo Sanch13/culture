@@ -2,6 +2,35 @@
 
 {% block title %}График проверок{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Стиль для кнопки замены внутри ячейки */
+    .btn-swap {
+        /* 1. Даем вертикальный отступ (было 1px, стало 4px) */
+        padding: 0px 4px;
+
+        /* 2. Чуть увеличиваем шрифт (иконку) */
+        font-size: 0.7rem;
+
+        /* 3. УБИРАЕМ line-height: 1, чтобы иконку не обрезало */
+        /* line-height: 1; */
+
+        margin-top: 6px;
+        border-radius: 4px;
+
+        /* 4. Центрируем иконку внутри кнопки */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-swap:hover {
+        background-color: #6c757d;
+        color: white;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>🗓 График работы</h1>
@@ -88,9 +117,31 @@
                                                     <span class="badge bg-secondary text-dark bg-opacity-10">⏳ Ожидание</span>
                                                 {% endif %}
                                             </div>
-                                            {% if cell.is_swapped %}
-                                                <div class="mt-1" title="Была замена"><i class="bi bi-arrow-left-right text-primary small"></i></div>
+
+                                            <!-- КНОПКА ЗАМЕНЫ (Только если не сдано) -->
+                                            {% if not cell.inspection.is_completed %}
+                                                <button class="btn btn-outline-secondary btn-swap"
+                                                        title="Поменяться сменами"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#exchangeModal"
+
+                                                        data-schedule-id="{{ cell.id }}"
+                                                        data-name="{{ cell.inspector.get_full_name }}"
+                                                        data-human-date="{{ cell.date|date:'d.m.Y' }}"
+                                                        data-iso-date="{{ cell.date|date:'Y-m-d' }}"
+
+                                                        onclick="openExchangeModal(this)">
+                                                    <i class="bi bi-arrow-left-right"></i>
+                                                </button>
                                             {% endif %}
+
+                                            <!-- Индикатор, что замена уже была -->
+                                            {% if cell.is_swapped %}
+                                                <div class="mt-1" title="Была замена">
+                                                    <i class="bi bi-exclamation-circle text-primary" style="font-size: 0.7rem;"></i>
+                                                </div>
+                                            {% endif %}
+
                                         </td>
                                     {% else %}
                                         <td class="bg-light text-muted small">-</td>
@@ -154,8 +205,66 @@
     </div>
 </div>
 
+<!-- ============================================================== -->
+<!-- МОДАЛЬНОЕ ОКНО: ОБМЕН СМЕНАМИ (AJAX ВЕРСИЯ) -->
+<!-- ============================================================== -->
+<div class="modal fade" id="exchangeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning bg-opacity-10">
+                <h5 class="modal-title">🔀 Обмен сменами</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- Форма отправляет данные на твою функцию обработки замены -->
+            <form action="{% url 'admin_exchange_shifts' %}" method="post">
+                {% csrf_token %}
+                <div class="modal-body">
+
+                    <!-- Скрытое поле: ID смены, КОТОРУЮ меняем -->
+                    <input type="hidden" name="current_schedule_id" id="exchCurrentId">
+
+                    <!-- Инфо-блок: Кто меняется -->
+                    <div class="alert alert-light border text-center mb-3">
+                        <div class="small text-muted text-uppercase fw-bold">Текущая смена</div>
+                        <div class="fs-5 fw-bold text-dark" id="exchOldName"></div>
+                        <div class="text-danger small">
+                            <i class="bi bi-calendar-event"></i> <span id="exchDate"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">С кем меняемся (Смены в будущем):</label>
+
+                        <!-- Селект (Заполняется через JS) -->
+                        <select class="form-select" name="target_schedule_id" id="targetSwapSelect" required size="20">
+                            <option value="" disabled selected>Сначала выберите смену...</option>
+                        </select>
+
+                        <!-- Спиннер загрузки -->
+                        <div id="loadingSpinner" class="text-center text-primary mt-3" style="display: none;">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <small class="ms-2">Поиск подходящих смен...</small>
+                        </div>
+
+                        <div class="form-text mt-2 small">
+                            <i class="bi bi-info-circle"></i> Система покажет только те смены, которые идут <u>после</u> выбранной даты.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Выполнить обмен</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- JAVASCRIPT ДЛЯ ПЕРЕДАЧИ ДАННЫХ В МОДАЛКУ -->
 <script>
+    // 1. Логика для генерации
     const generateModal = document.getElementById('generateModal')
     if (generateModal) {
         generateModal.addEventListener('show.bs.modal', event => {
@@ -174,6 +283,67 @@
             modalInput.value = weeks
             modalDesc.textContent = text
         })
+    }
+
+    // 2. Логика для обмена (новая)
+    async function openExchangeModal(button) {
+        // 1. Достаем данные из кнопки
+        const scheduleId = button.getAttribute('data-schedule-id');
+        const name = button.getAttribute('data-name');
+        const humanDate = button.getAttribute('data-human-date');
+        const isoDate = button.getAttribute('data-iso-date'); // YYYY-MM-DD
+
+        // --- ПРОВЕРКА ОТЛАДКИ ---
+        console.log("Дата для API:", isoDate);
+        if (!isoDate) {
+            alert("Ошибка: Неверный формат даты в кнопке");
+            return;
+        }
+
+        // 2. Заполняем статику в модалке
+        document.getElementById('exchCurrentId').value = scheduleId;
+        document.getElementById('exchOldName').textContent = name;
+        document.getElementById('exchDate').textContent = humanDate;
+
+        // 3. Подготовка к запросу API
+        const select = document.getElementById('targetSwapSelect');
+        const spinner = document.getElementById('loadingSpinner');
+
+        // Очищаем старые опции
+        select.innerHTML = '';
+        select.disabled = true; // Блокируем пока грузится
+        spinner.style.display = 'block'; // Показываем спиннер
+
+        try {
+            // 4. Делаем запрос к нашему API
+            // Убедись, что url начинается со слэша /
+            const response = await fetch(`/api/admin/swap-candidates/?date=${isoDate}`);
+
+            if (!response.ok) throw new Error('Ошибка сети или 404');
+
+            const data = await response.json();
+
+            // 5. Заполняем Select
+            if (!data.candidates || data.candidates.length === 0) {
+                const option = new Option("Нет доступных смен после этой даты", "");
+                option.disabled = true;
+                select.add(option);
+            } else {
+                data.candidates.forEach(item => {
+                    // new Option(text, value)
+                    const option = new Option(item.label, item.id);
+                    select.add(option);
+                });
+                select.disabled = false; // Разблокируем
+            }
+
+        } catch (error) {
+            console.error('Ошибка:', error);
+            const option = new Option("Ошибка загрузки данных", "");
+            select.add(option);
+        } finally {
+            spinner.style.display = 'none'; // Скрываем спиннер
+        }
     }
 </script>
 {% endblock %}

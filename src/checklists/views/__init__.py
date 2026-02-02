@@ -9,6 +9,7 @@ from checklists.views.admin_cabinet import (
     admin_employees_list,
     admin_generate_schedule_view,
     admin_swap_log,
+    admin_exchange_shifts,
 )
 from checklists.views.employee_cabinet import (
     employee_dashboard,
@@ -22,6 +23,7 @@ from checklists.views.api import (
     save_comment_ajax,
     save_status_ajax,
     toggle_employee_permission,
+    api_get_swap_candidates,
 )
 
 __all__ = (
@@ -35,6 +37,7 @@ __all__ = (
     "admin_employees_list",
     "admin_generate_schedule_view",
     "admin_swap_log",
+    "admin_exchange_shifts",
     "employee_dashboard",
     "inspection_form_view",
     "start_inspection_view",
@@ -44,4 +47,5 @@ __all__ = (
     "save_comment_ajax",
     "save_status_ajax",
     "toggle_employee_permission",
+    "api_get_swap_candidates",
 )

@@ -20,6 +20,11 @@ urlpatterns = [
         name="admin_generate_schedule",
     ),
     path("cabinet/swaps/", views.admin_swap_log, name="admin_swaps"),
+    path(
+        "cabinet/admin/exchange-shifts/",
+        views.admin_exchange_shifts,
+        name="admin_exchange_shifts",
+    ),
     # Предпросмотр конкретного шаблона
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
     # Кабинет пользователя
@@ -59,4 +64,9 @@ urlpatterns = [
         name="toggle_employee_permission",
     ),
     path("api/swap/<int:schedule_id>/", views.auto_swap_shift, name="auto_swap_shift"),
+    path(
+        "api/admin/swap-candidates/",
+        views.api_get_swap_candidates,
+        name="api_get_swap_candidates",
+    ),
 ]

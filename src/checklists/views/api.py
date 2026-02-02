@@ -1,11 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from django.shortcuts import get_object_or_404
 
 from checklists.models import (
     ViolationPhoto,
     InspectionItem,
+    Schedule,
 )
 from checklists.decorators import employee_required, admin_required
 
@@ -100,3 +101,36 @@ def toggle_employee_permission(request, user_id):
     user.save()
 
     return JsonResponse({"status": "ok", "new_state": user.can_perform_inspections})
+
+
+@admin_required
+@require_GET
+def api_get_swap_candidates(request):
+    """
+    API: Возвращает список смен, доступных для обмена,
+    которые идут СТРОГО ПОЗЖЕ переданной даты.
+    """
+    source_date_str = request.GET.get("date")  # Ожидаем формат YYYY-MM-DD
+
+    if not source_date_str:
+        return JsonResponse({"error": "Date is required"}, status=400)
+
+    # Ищем смены позже указанной даты
+    candidates = (
+        Schedule.objects.filter(
+            date__gt=source_date_str,  # Строго больше даты исходной смены
+            inspection__isnull=True,  # Еще не выполнено
+            is_swapped=False,  # Еще не менялись
+        )
+        .select_related("inspector", "template__location")
+        .order_by("date", "inspector__last_name")
+    )
+
+    data = []
+    for item in candidates:
+        # Формируем красивую строку для селекта
+        label = f"📅 {item.date.strftime('%d.%m')} — {item.inspector.last_name} {item.inspector.first_name}"
+        # label = f"📅 {item.date.strftime('%d.%m')} — {item.inspector.last_name} {item.inspector.first_name}. ({item.template.location.name[:20]})"
+        data.append({"id": item.id, "label": label})
+
+    return JsonResponse({"candidates": data})
