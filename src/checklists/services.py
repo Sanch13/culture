@@ -12,7 +12,7 @@ from checklists.models import (
     ChecklistTemplate,
     SwapLog,
 )
-from checklists.utils import format_phone_number
+from checklists.utils import get_data_information_about_department
 
 User = get_user_model()
 
@@ -259,33 +259,17 @@ def prepare_daily_notifications(target_date=None):
         if not inspector.email:
             continue
 
-        # Собираем данные начальника
-        manager_info = "Не назначен"
-        if location.manager:
-            man_name = f"{location.manager.last_name} {location.manager.first_name}"
-            man_phone = format_phone_number(location.manager.phone) or "нет телефона"
-            manager_info = f"{man_name} (Тел: {man_phone})"
-
-        # Собираем данные мастеров
-        masters_list = []
-        for master in location.masters.all():
-            m_name = f"{master.last_name} {master.first_name}"
-            m_phone = format_phone_number(master.phone) or "нет телефона"
-            masters_list.append(f"- {m_name} (Тел: {m_phone})")
-
-        masters_str = (
-            "\n".join(masters_list) if masters_list else "Нет назначенных мастеров"
-        )
+        manager_text, masters_block = get_data_information_about_department(location)
 
         # Формируем тело письма
         email_body = (
-            f"Здравствуйте, {inspector.last_name} {inspector.first_name}!\n\n"
-            f"На {target_date.strftime('%d.%m.%Y')} вам назначена проверка.\n"
-            f"Участок: {location.name}\n"
-            f"Шаблон чек-листа: {item.template.name}\n\n"
+            f"Здравствуйте, {inspector.first_name}!\n\n"
+            f"⚠️ ВНИМАНИЕ: На {target_date.strftime('%d.%m.%Y')} вам назначена проверка.\n"
+            f"📍 Участок: {location.name}\n"
+            f"📋 Чек-лист: {item.template.name}\n\n"
             f"--- КОНТАКТЫ УЧАСТКА ---\n"
-            f"Начальник:\n{manager_info}\n\n"
-            f"Мастера:\n{masters_str}\n\n"
+            f"Начальник:\n{manager_text}\n\n"
+            f"Мастера:\n{masters_block}\n\n"
             f"Пожалуйста, не забудьте заполнить отчет в системе."
         )
 
@@ -301,5 +285,54 @@ def prepare_daily_notifications(target_date=None):
     # Подмена для теста ПОТОМ удалить !!!
     for item in notifications_data:
         item["recipient_email"] = "a.zubchyk@miran-bel.com"
+    # Подмена для теста ПОТОМ удалить !!!
 
     return notifications_data
+
+
+def get_swap_notification_data(schedule_id):
+    """
+    Собирает данные для письма о назначении замены.
+    """
+    try:
+        # Тянем данные с оптимизацией
+        item = (
+            Schedule.objects.select_related(
+                "inspector",
+                "template",
+                "template__location",
+                "template__location__manager",
+            )
+            .prefetch_related("template__location__masters")
+            .get(id=schedule_id)
+        )
+    except Schedule.DoesNotExist:
+        return None
+
+    inspector = item.inspector
+    location = item.template.location
+
+    # Если нет email, слать некуда
+    if not inspector.email:
+        return None
+
+    manager_text, masters_block = get_data_information_about_department(location)
+
+    # Текст письма (Акцент на то, что это ЗАМЕНА)
+    email_body = (
+        f"Здравствуйте, {inspector.first_name}!\n\n"
+        f"⚠️ ВНИМАНИЕ: Вам назначена новая проверка (в порядке замены).\n"
+        f"📅 Дата: {item.date.strftime('%d.%m.%Y')}\n"
+        f"📍 Участок: {location.name}\n"
+        f"📋 Чек-лист: {item.template.name}\n\n"
+        f"--- КОНТАКТНЫЕ ЛИЦА ---\n"
+        f"Начальник:\n{manager_text}\n\n"
+        f"Мастера:\n{masters_block}\n\n"
+        f"Пожалуйста, не забудьте заполнить отчет в системе."
+    )
+
+    return {
+        "email": inspector.email,
+        "subject": f"⚡ Назначение замены: {location.name}",
+        "body": email_body,
+    }

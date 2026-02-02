@@ -13,6 +13,7 @@ from checklists.models import (
 )
 from checklists.decorators import employee_required
 from checklists.services import create_inspection_from_template, perform_auto_swap
+from checklists.tasks import notify_user_about_swap
 
 
 # --- ЗОНА СОТРУДНИКА (Строгий режим) ---
@@ -258,6 +259,7 @@ def auto_swap_shift(request, schedule_id):
 
     if success:
         messages.success(request, message)
+        notify_user_about_swap.delay(schedule_item.id)
     else:
         messages.error(request, message)
 

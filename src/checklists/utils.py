@@ -57,3 +57,21 @@ def format_phone_number(raw_phone):
     except phonenumbers.NumberParseException:
         # Если пришел мусор, возвращаем как есть, чтобы ничего не упало
         return raw_phone
+
+
+def get_data_information_about_department(department) -> tuple[str, str]:
+    if department.manager:
+        m_phone = format_phone_number(department.manager.phone) or "нет телефона"
+        manager_text = f"{department.manager.get_full_name()} (Тел: {m_phone})"
+    else:
+        manager_text = "Не назначен"
+
+    masters_list = []
+    for master in department.masters.all():
+        m_phone = format_phone_number(master.phone) or "нет телефона"
+        masters_list.append(f"- {master.get_full_name()} (Тел: {m_phone})")
+
+    masters_block = (
+        "\n".join(masters_list) if masters_list else "Нет назначенных мастеров"
+    )
+    return manager_text, masters_block

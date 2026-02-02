@@ -7,7 +7,11 @@ from django.conf import settings
 from celery import shared_task
 
 from checklists.utils import send_message
-from checklists.services import generate_schedule, prepare_daily_notifications
+from checklists.services import (
+    generate_schedule,
+    prepare_daily_notifications,
+    get_swap_notification_data,
+)
 
 
 @shared_task
@@ -62,25 +66,48 @@ def send_inspection_reminders():
 
     for email_data in emails_to_send:
         # Тут вызываешь свою уже готовую функцию отправки
-        send_email.delay(email_data)
+        send_email.delay(
+            to=email_data["recipient_email"],
+            subject=email_data["subject"],
+            body=email_data["body"],
+        )
         print(f"Отправка письма на {email_data['recipient_email']}...")  # Заглушка
 
     return f"Обработано {len(emails_to_send)} уведомлений."
 
 
 @shared_task
-def send_email(email_data):
+def send_email(to: str, subject: str, body: str):
     try:
         message = EmailMessage()
-        message["Subject"] = email_data["subject"]
+        message["Subject"] = subject
         message["From"] = settings.EMAIL_HOST_USER
-        message["To"] = email_data["recipient_email"]
-        message.set_content(email_data["body"])
+        message["To"] = to
+        message.set_content(body)
 
         send_message(message=message)
 
         # logger.info("Email успешно отправлен админу")
         # logger.info("---------End---------send_admin_email()---------")
+        return f"Письмо успешно отправлено на {to}"
+
     except Exception:
         # logger.exception(f"Ошибка: {e}")
         pass
+
+
+@shared_task
+def notify_user_about_swap(schedule_id):
+    """
+    Задача: Уведомить сотрудника, что на него перекинули смену.
+    """
+    data = get_swap_notification_data(schedule_id)
+
+    if data:
+        # Отправляем письмо
+        send_email.delay(to=data["email"], subject=data["subject"], body=data["body"])
+
+        print(f"📧 [SWAP NOTIFICATION] Sent to {data['email']}\n{data['body']}")
+        return f"Sent swap email to {data['email']}"
+
+    return "No email sent (invalid data or no email)"
