@@ -188,15 +188,15 @@ def perform_auto_swap(schedule_item, reason):
 
     # 3. Совершаем обмен
     with transaction.atomic():
-        initiator = schedule_item.inspector
+        current_user = schedule_item.inspector
         target_user = candidate.inspector
 
-        old_date = schedule_item.date
-        new_date = candidate.date
+        current_date = schedule_item.date
+        target_date = candidate.date
 
         # Меняем владельцев
         schedule_item.inspector = target_user
-        candidate.inspector = initiator
+        candidate.inspector = current_user
 
         # Помечаем, что этот слот (в будущем) теперь "Грязный" (занят по обмену).
         # Теперь этого инициатора никто не сможет выдернуть оттуда автоматом.
@@ -213,16 +213,16 @@ def perform_auto_swap(schedule_item, reason):
 
         # 4. Пишем в Историю
         SwapLog.objects.create(
-            requestor=initiator,
+            requestor=current_user,
             target_user=target_user,
-            source_date=old_date,
-            target_date=new_date,
+            source_date=current_date,
+            target_date=target_date,
             reason=reason,
         )
 
     return (
         True,
-        f"Обмен выполнен. Вы перенесены на {new_date}. Вместо вас выйдет {target_user.last_name}.",
+        f"Обмен выполнен. Вы перенесены на {target_date}. Вместо вас выйдет {target_user.last_name}.",
     )
 
 

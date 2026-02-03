@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Count, Q
+from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.contrib import messages
@@ -178,43 +179,45 @@ def admin_exchange_shifts(request):
     current_sched = get_object_or_404(Schedule, id=current_schedule_id)
     target_sched = get_object_or_404(Schedule, id=target_schedule_id)
 
-    # Запоминаем людей
-    user_a = current_sched.inspector  # Тот, кто был сегодня
-    user_b = target_sched.inspector  # Тот, кто был завтра (донор)
+    # 3. Совершаем обмен
+    with transaction.atomic():
+        current_user = current_sched.inspector  # Тот, кто был сегодня
+        target_user = target_sched.inspector  # Тот, кто был завтра (донор)
 
-    # === ЛОГИКА ОБМЕНА (SWAP) ===
-    # 1. Меняем инспекторов местами
-    current_sched.inspector = user_b
-    current_sched.is_swapped = True  # Помечаем, что была замена
+        current_date = current_sched.date
+        target_date = target_sched.date
 
-    target_sched.inspector = user_a
-    target_sched.is_swapped = (
-        True  # И тут тоже (или нет, зависит от логики, но лучше пометить)
-    )
+        # === ЛОГИКА ОБМЕНА (SWAP) ===
+        # 1. Меняем инспекторов местами
+        current_sched.inspector = target_user
+        current_sched.is_swapped = False
 
-    # 2. Сохраняем
-    current_sched.save()
-    target_sched.save()
+        target_sched.inspector = current_user
+        target_sched.is_swapped = True
 
-    # 3. Пишем лог (Один общий или два)
-    SwapLog.objects.create(
-        requestor=request.user,  # Админ
-        target_user=user_b,  # Кого поставили сегодня
-        source_date=current_sched.date,
-        target_date=current_sched.date,
-        reason=f"Обмен сменами с {user_a.last_name} ({current_sched.date}) <-> {user_b.last_name} ({target_sched.date})",
-    )
+        # 2. Сохраняем
+        current_sched.save()
+        target_sched.save()
 
-    # 4. Уведомляем ОБОИХ сотрудников
-    # user_b теперь работает сегодня -> шлем ему письмо
-    notify_user_about_swap.delay(current_sched.id)
+        # 3. Пишем лог (Один общий или два)
+        SwapLog.objects.create(
+            requestor=request.user,  # Админ
+            target_user=target_user,  # Кого поставили сегодня
+            source_date=current_date,
+            target_date=target_date,
+            reason=f"Обмен сменами с {current_user.last_name} ({current_date}) <-> {target_user.last_name} ({target_date})",
+        )
 
-    # user_a теперь работает завтра -> шлем ему письмо про завтра
-    # notify_user_about_swap.delay(target_sched.id)
-    messages.success(
-        request,
-        f"Успешно: {user_b.last_name} выходит, {user_a.last_name} перенесен на {target_sched.date}.",
-    )
+        # 4. Уведомляем ОБОИХ сотрудников
+        # user_b теперь работает сегодня -> шлем ему письмо
+        notify_user_about_swap.delay(current_sched.id)
+
+        # user_a теперь работает завтра -> шлем ему письмо про завтра
+        # notify_user_about_swap.delay(target_sched.id)
+        messages.success(
+            request,
+            f"Успешно: {target_user.last_name} выходит, {current_user.last_name} перенесен на {target_sched.date}.",
+        )
     return redirect("admin_schedule")
 
 

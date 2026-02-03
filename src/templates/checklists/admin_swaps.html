@@ -36,7 +36,7 @@
 
                     <!-- Тип действия -->
                     <td>
-                        {% if log.requestor == log.target_user %}
+                        {% if log.requestor.is_superuser %}
                             <span class="badge bg-warning text-dark">Перенос</span>
                         {% else %}
                             <span class="badge bg-danger">Замена</span>
