@@ -1,10 +1,17 @@
+import sys
 import ssl
+from io import BytesIO
 import smtplib
 from email.message import Message
 
 from django.conf import settings
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
+from PIL import Image
 import phonenumbers
+import pillow_heif
+
+pillow_heif.register_heif_opener()
 
 
 def is_privileged_user(user):
@@ -75,3 +82,40 @@ def get_data_information_about_department(department) -> tuple[str, str]:
         "\n".join(masters_list) if masters_list else "Нет назначенных мастеров"
     )
     return manager_text, masters_block
+
+
+def compress_image(image, quality=80, max_width=1280):
+    output = BytesIO()
+
+    # Используем контекстный менеджер для безопасности
+    with Image.open(image) as img:
+        # Конвертация цвета
+        if img.mode in ("RGBA", "LA"):
+            background = Image.new(img.mode[:-1], img.size, "#fff")
+            background.paste(img, img.split()[-1])
+            img_to_save = background
+        elif img.mode != "RGB":
+            img_to_save = img.convert("RGB")
+        else:
+            img_to_save = img.copy()  # Копируем, чтобы не зависеть от закрытия img
+
+        # Ресайз
+        width, height = img_to_save.size
+        if width > max_width:
+            ratio = max_width / width
+            new_height = int(height * ratio)
+            img_to_save = img_to_save.resize(
+                (max_width, new_height), Image.Resampling.LANCZOS
+            )
+
+        # Сохранение (здесь происходит реальная работа)
+        img_to_save.save(output, format="WEBP", quality=quality, optimize=True)
+
+    # После выхода из with файл Pillow закроется, но буфер output останется
+    output.seek(0)
+
+    new_name = image.name.split(".")[0] + ".webp"
+
+    return InMemoryUploadedFile(
+        output, "ImageField", new_name, "image/webp", sys.getsizeof(output), None
+    )

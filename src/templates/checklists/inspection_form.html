@@ -218,15 +218,28 @@
                                     {% endfor %}
                                 </div>
 
-                                <!-- Кнопка добавления фото -->
-                                <!-- id="photo_btn_..." нужен для блокировки -->
-                                <div id="photo_btn_{{ item.id }}">
+                                <!-- Кнопки добавления фото -->
+                                <!-- id="photo_btn_..." нужен для блокировки (если будешь использовать) -->
+                                <div id="photo_btn_{{ item.id }}" class="d-flex gap-2">
+
+                                    <!-- КНОПКА 1: ГАЛЕРЕЯ (Множественный выбор) -->
                                     <label class="btn btn-sm btn-outline-primary">
-                                        📷 Добавить фото
+                                        <i class="bi bi-folder2-open"></i> Галерея
+                                        <!-- multiple позволяет выбрать несколько фото сразу -->
                                         <input type="file" style="display: none;" multiple accept="image/*"
-                                            onchange="uploadPhoto(this, {{ item.id }})">
+                                               onchange="uploadPhoto(this, {{ item.id }})">
                                     </label>
+
+                                    <!-- КНОПКА 2: КАМЕРА (Прямой доступ) -->
+                                    <label class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-camera-fill"></i> Снять
+                                        <!-- capture="environment" открывает заднюю камеру. multiple здесь обычно не работает на телефонах -->
+                                        <input type="file" style="display: none;" accept="image/*" capture="environment"
+                                               onchange="uploadPhoto(this, {{ item.id }})">
+                                    </label>
+
                                 </div>
+
                             </div>
                         </div>
                     </div>

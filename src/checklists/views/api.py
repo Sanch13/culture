@@ -8,6 +8,7 @@ from checklists.models import (
     InspectionItem,
     Schedule,
 )
+from checklists.utils import compress_image
 from checklists.decorators import employee_required, admin_required
 
 User = get_user_model()
@@ -29,8 +30,16 @@ def upload_photo_ajax(request, item_id):
     data = []
 
     for photo in photos:
-        vp = ViolationPhoto.objects.create(item=item, image=photo)
-        data.append({"id": vp.id, "url": vp.image.url})
+        try:
+            # Сжимаем фото перед сохранением
+            compressed_photo = compress_image(photo)
+            vp = ViolationPhoto.objects.create(item=item, image=compressed_photo)
+            data.append({"id": vp.id, "url": vp.image.url})
+
+        except Exception as e:
+            # Если файл битый или не картинка - просто пропускаем (или логируем)
+            print(f"Error compressing image: {e}")
+            continue
 
     # 3. Возвращаем список загруженных фото
     return JsonResponse({"status": "ok", "photos": data})
