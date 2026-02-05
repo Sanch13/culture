@@ -24,9 +24,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
     networks:
       - local
-    restart: unless-stopped
 
   redis:
     image: redis:8.2-alpine
@@ -43,8 +43,10 @@ services:
     command: uv run celery -A config worker --loglevel=info
     env_file:
       - .env
+    volumes:
+      - ./static:/app/static
+      - ./media:/app/media
     depends_on:
-      - web
       - redis
       - db
     restart: unless-stopped
@@ -57,16 +59,40 @@ services:
     command: uv run celery -A config beat --loglevel=info
     env_file:
       - .env
+    volumes:
+      - ./static:/app/static
+      - ./media:/app/media
     depends_on:
-      - web
       - redis
       - db
     restart: unless-stopped
     networks:
       - local
 
+  nginx:
+    image: nginx:latest
+    container_name: nginx_proxy
+    ports:
+      - "80:80"
+#      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./static:/app/static:ro
+      - ./media:/app/media:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+    networks:
+      - local
+      - web-public
+
 networks:
   local:
+    name: local
+    driver: bridge
+    internal: true
+  web-public:
+    name: web-public
     driver: bridge
 
 volumes:
