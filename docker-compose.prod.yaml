@@ -1,0 +1,74 @@
+services:
+  web:
+    image: ${IMAGE}
+    container_name: web-culture
+    volumes:
+      - ./static:/app/static
+      - ./media:/app/media
+    command: "uv run gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - local
+
+  db:
+    image: postgres:17.3-alpine
+    container_name: db-culture
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - local
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.2-alpine
+    container_name: redis-culture
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - local
+
+  celery:
+    image: ${IMAGE}
+    container_name: celery-culture
+    command: uv run celery -A config worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - web
+      - redis
+      - db
+    restart: unless-stopped
+    networks:
+      - local
+
+  celery_beat:
+    image: ${IMAGE}
+    container_name: celery_beat-culture
+    command: uv run celery -A config beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - web
+      - redis
+      - db
+    restart: unless-stopped
+    networks:
+      - local
+
+networks:
+  local:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:

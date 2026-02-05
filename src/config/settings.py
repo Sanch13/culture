@@ -9,7 +9,6 @@ ENV_FILE = PROJECT_ROOT / ".env"
 
 class Settings(BaseSettings):
     SECRET_KEY: SecretStr
-    DEBUG: bool
     ALLOWED_HOSTS: list
     ALLOWED_HOSTS_FOR_DEPLOY: list
 

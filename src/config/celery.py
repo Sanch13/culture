@@ -2,7 +2,8 @@ import os
 from celery import Celery
 from celery.schedules import crontab
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.dev")
+default_settings = "config.prod"
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", default_settings)
 
 app = Celery("culture")
 app.config_from_object("django.conf:settings", namespace="CELERY")
