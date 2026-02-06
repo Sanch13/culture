@@ -22,7 +22,19 @@ cd src
 ```
 
 
+# сделать дамп данных
+```shell
+docker compose -f docker-compose.local.yml exec web python manage.py dumpdata users checklists --indent 4 --output fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json
+```
+# копирование фикстуры
+```shell
+docker cp ./"all_checklists_data_2026-02-05_14:38:58.json" web-culture:/app/
+```
 
+# загрузка данных в БД
+```shell
+docker compose -f docker-compose.prod.yml exec web python manage.py loaddata ./fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json
+```
 
 
 

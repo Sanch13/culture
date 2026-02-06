@@ -5,7 +5,7 @@ services:
     volumes:
       - ./static:/app/static
       - ./media:/app/media
-    command: "uv run gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
+    command: "uv run --no-sync gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
     depends_on:
       - db
       - redis
@@ -14,6 +14,7 @@ services:
     restart: unless-stopped
     networks:
       - local
+      - web-public
 
   db:
     image: postgres:17.3-alpine
@@ -40,7 +41,7 @@ services:
   celery:
     image: ${IMAGE}
     container_name: celery-culture
-    command: uv run celery -A config worker --loglevel=info
+    command: uv run --no-sync celery -A config worker --loglevel=info
     env_file:
       - .env
     volumes:
@@ -56,7 +57,7 @@ services:
   celery_beat:
     image: ${IMAGE}
     container_name: celery_beat-culture
-    command: uv run celery -A config beat --loglevel=info
+    command: uv run --no-sync celery -A config beat --loglevel=info
     env_file:
       - .env
     volumes:
@@ -83,7 +84,6 @@ services:
       - web
     restart: unless-stopped
     networks:
-      - local
       - web-public
 
 networks:

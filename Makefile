@@ -1,5 +1,6 @@
 # makefile
 DC = docker compose
+D = docker
 EXEC = docker exec -it
 LOGS = docker logs
 ENV = --env-file .env
@@ -44,25 +45,34 @@ app-sync:
 	@uv sync
 
 
-# .PHONY: build
-# build:
-# 	@${D} build -t ${IMAGE_NAME} .
-#
-# .PHONY: app-del
-# app-del:
-# 	@${D} rmi ${IMAGE_NAME}
-#
-# .PHONY: push
-# push:
-# 	@${D} push ${IMAGE_NAME}
+.PHONY: app-build
+app-build:
+	@${D} build -t ${IMAGE_NAME} .
+
+.PHONY: app-push
+app-push:
+	@${D} push ${IMAGE_NAME}
+
+.PHONY: app-rebuild-push
+app-rebuild-push:
+	@$(MAKE) app-del
+	@$(MAKE) cash
+	@$(MAKE) app-build
+	@$(MAKE) app-push
+
+.PHONY: app-del
+app-del:
+	@${D} rmi ${IMAGE_NAME}
+
+.PHONY: cash
+cash:
+	@${D} system prune -f
+
+# .PHONY: test
+# test:  #  Запускает тесты только в папке tests
+# 	@cd backend && uv run pytest tests && cd ..
 #
 # .PHONY: size
 # size:
 # 	@${D} system df
 #
-# .PHONY: cash
-# cash:
-# 	@${D} system prune -f
-# .PHONY: test
-# test:  #  Запускает тесты только в папке tests
-# 	@cd backend && uv run pytest tests && cd ..
