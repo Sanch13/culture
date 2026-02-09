@@ -99,6 +99,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# CSRF_TRUSTED_ORIGINS = [
+#     'http://0.0.0.0:8000',
+#     'http://127.0.0.1:8000',
+#     'http://localhost:8000',
+# ]
+
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
 EMAIL_HOST = settings.EMAIL_HOST

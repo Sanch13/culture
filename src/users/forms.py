@@ -63,6 +63,20 @@ class CustomUserCreationForm(UserCreationForm):
             return None  # Записываем NULL в базу вместо пустой строки
         return phone
 
+    def clean_email(self):
+        """Переводим email в нижний регистр при регистрации."""
+        email = self.cleaned_data.get("email")
+        if email:
+            email = email.lower()
+
+            # Дополнительная проверка на уникальность (на всякий случай)
+            if User.objects.filter(email=email).exists():
+                raise forms.ValidationError(
+                    "Пользователь с таким Email уже существует."
+                )
+
+        return email
+
 
 class CustomAuthenticationForm(AuthenticationForm):
     """
@@ -79,6 +93,13 @@ class CustomAuthenticationForm(AuthenticationForm):
     password = forms.CharField(
         label="Пароль", widget=forms.PasswordInput(attrs={"class": "form-control"})
     )
+
+    def clean_username(self):
+        """Переводим email в нижний регистр при входе."""
+        username = self.cleaned_data.get("username")
+        if username:
+            username = username.lower()
+        return username
 
 
 class UserProfileForm(forms.ModelForm):
