@@ -48,15 +48,31 @@
                 </li>
             </ul>
 
-            <!-- Правая часть (Имя + Выход) -->
-            <div class="d-flex align-items-center text-white gap-3">
-                <span class="d-none d-md-inline small">
-                    {{ user.first_name }} {{ user.last_name }}
-                </span>
+            <!-- ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ (Справа) -->
+            <div class="d-flex align-items-center flex-wrap gap-3 mt-3 mt-md-0">
 
+                <!-- ПЛАШКА СТАТУСА -->
+                {% if user.can_perform_inspections %}
+                    <!-- ЗЕЛЕНАЯ ПЛАШКА -->
+                    <span class="badge bg-success px-3 py-2 shadow-sm">
+                        <i class="bi bi-check-lg me-1"></i> Допуск: ЕСТЬ
+                    </span>
+                {% else %}
+                    <!-- КРАСНАЯ ПЛАШКА -->
+                    <span class="badge bg-danger px-3 py-2 shadow-sm">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Допуск: НЕТ
+                    </span>
+                {% endif %}
+
+                <!-- Имя пользователя -->
+                <div class="text-white small fw-bold">
+                    {{ user.first_name }} {{ user.last_name }}
+                </div>
+
+                <!-- Кнопка Выход -->
                 <form action="{% url 'users:logout' %}" method="post" class="d-inline">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-light text-primary fw-bold">
+                    <button type="submit" class="btn btn-sm btn-light text-primary fw-bold px-3">
                         Выйти
                     </button>
                 </form>

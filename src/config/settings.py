@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     SECRET_KEY: SecretStr
     ALLOWED_HOSTS: list
     ALLOWED_HOSTS_FOR_DEPLOY: list
+    SITE_URL: str
 
     EMAIL_HOST: str
     EMAIL_PORT: int

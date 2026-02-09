@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.shortcuts import get_object_or_404
@@ -10,6 +11,7 @@ from checklists.models import (
 )
 from checklists.utils import compress_image
 from checklists.decorators import employee_required, admin_required
+from checklists.tasks import send_email
 
 User = get_user_model()
 
@@ -108,6 +110,18 @@ def toggle_employee_permission(request, user_id):
     # Меняем на противоположное
     user.can_perform_inspections = not user.can_perform_inspections
     user.save()
+
+    if user.can_perform_inspections:
+        email = user.email
+        subject = "✅ Вам открыт доступ к проверкам"
+        body = (
+            f"Здравствуйте, {user.first_name}!\n\n"
+            f"Администратор предоставил вам доступ к проверкам.\n"
+            f"Теперь вы будете включены в график инспекций и можете проводить проверки.\n\n"
+            f"Войдите в личный кабинет: {settings.SITE_URL}my-checks/"
+        )
+
+        send_email.delay(to=email, subject=subject, body=body)
 
     return JsonResponse({"status": "ok", "new_state": user.can_perform_inspections})
 
