@@ -53,6 +53,7 @@ services:
     restart: unless-stopped
     networks:
       - local
+      - web-public
 
   celery_beat:
     image: ${IMAGE}
