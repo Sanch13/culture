@@ -8,7 +8,7 @@ LOCAL_FILE = docker-compose.local.yml
 STORAGES_FILE = docker_compose/storages.yaml
 APP_CONTAINER = web
 SERVICE_NAME = web
-IMAGE_NAME = miran2025/culture:0.0.2
+IMAGE = miran2025/culture:0.0.2
 
 .PHONY: app-logs
 app-logs:
@@ -47,11 +47,11 @@ app-sync:
 
 .PHONY: app-build
 app-build:
-	@${D} build -t ${IMAGE_NAME} .
+	@${D} build -t ${IMAGE} .
 
 .PHONY: app-push
 app-push:
-	@${D} push ${IMAGE_NAME}
+	@${D} push ${IMAGE}
 
 .PHONY: app-rebuild-push
 app-rebuild-push:
@@ -62,7 +62,9 @@ app-rebuild-push:
 
 .PHONY: app-del
 app-del:
-	@${D} rmi ${IMAGE_NAME}
+	@if ${D} image inspect ${IMAGE} >/dev/null 2>&1; then \
+		${D} rmi ${IMAGE}; \
+	fi
 
 .PHONY: cash
 cash:
