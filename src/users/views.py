@@ -5,6 +5,7 @@ from django.contrib import messages
 
 from checklists.decorators import employee_required
 from users.forms import CustomUserCreationForm, UserProfileForm
+from users.tasks import notify_admins_about_registration
 
 
 def register(request):
@@ -15,7 +16,11 @@ def register(request):
             user = form.save()
             # 2. Сразу логиним его (чтобы не заставлять вводить пароль снова)
             login(request, user)
-            # 3. Перенаправляем на главную (или в кабинет)
+            # 3. --- ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНАМ (В ФОНЕ) ---
+            # transaction.on_commit не обязателен, если не используются сложные транзакции,
+            # но хорошая практика вызывать celery после сохранения в БД.
+            notify_admins_about_registration.delay(user.id)
+            # 4. Перенаправляем на главную (или в кабинет)
             return redirect("index")
     else:
         form = CustomUserCreationForm()
