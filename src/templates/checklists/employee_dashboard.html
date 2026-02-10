@@ -12,9 +12,18 @@
         <div class="card shadow-sm border-primary mb-5">
             <div class="card-body text-center p-4 p-md-5">
 
-                {% if is_today %}
-                    <h6 class="text-uppercase text-danger fw-bold mb-2">🔥 Требуется проверка СЕГОДНЯ</h6>
+                {% if task.inspection.is_completed %}
+                    <!-- Сценарий: Все сделано -->
+                    <h6 class="text-uppercase text-success fw-bold mb-2">
+                        <i class="bi bi-check-circle-fill"></i> Проверка выполнена
+                    </h6>
+                {% elif is_today %}
+                    <!-- Сценарий: Сегодня, но еще не сделано -->
+                    <h6 class="text-uppercase text-danger fw-bold mb-2">
+                        🔥 Требуется проверка СЕГОДНЯ
+                    </h6>
                 {% else %}
+                    <!-- Сценарий: Будущее -->
                     <h6 class="text-uppercase text-primary fw-bold mb-2">
                         🔜 Плановая проверка: {{ task.date|date:"l, d E" }}
                     </h6>
