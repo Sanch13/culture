@@ -12,7 +12,7 @@ from checklists.models import (
     ChecklistTemplate,
     SwapLog,
 )
-from checklists.utils import get_data_information_about_department, format_phone_number
+from checklists.utils import format_phone_number
 
 User = get_user_model()
 
@@ -226,11 +226,133 @@ def perform_auto_swap(schedule_item, reason):
     )
 
 
+def _get_production_chief_text():
+    """
+    Возвращает готовый текст с контактами Начальника производства.
+    Использует кэширование запроса (если нужно), но пока просто берет из БД.
+    """
+    chief = User.objects.filter(role=User.ROLE_PRODUCTION_CHIEF, is_active=True).first()
+
+    if not chief:
+        return ""
+
+    phone = format_phone_number(chief.phone) or "нет телефона"
+    return (
+        f"\n------------------------\n"
+        f"❗️ В случае отсутствия кого-то из руководителей производственного участка "
+        f"обращаться к Начальнику производства:\n"
+        f"{chief.first_name} {chief.last_name} (Тел: {phone})"
+    )
+
+
+def _get_location_contacts_text(location):
+    """
+    Собирает контакты участка (Начальник, Зам, Ст. мастер, Мастера).
+    """
+    lines = []
+
+    # 1. Руководство
+    if location.manager:
+        p = format_phone_number(location.manager.phone)
+        lines.append(f"👤 Начальник участка: {location.manager.get_full_name()} ({p})")
+
+    if location.deputy:
+        p = format_phone_number(location.deputy.phone)
+        lines.append(f"👤 Зам. начальника: {location.deputy.get_full_name()} ({p})")
+
+    if location.senior_master:
+        p = format_phone_number(location.senior_master.phone)
+        lines.append(
+            f"👷‍♂️ Старший мастер: {location.senior_master.get_full_name()} ({p})"
+        )
+
+    # 2. Мастера
+    masters = location.masters.all()
+    if masters:
+        lines.append("👷 Мастера:")
+        for m in masters:
+            p = format_phone_number(m.phone)
+            lines.append(f"   - {m.get_full_name()} ({p})")
+
+    if not lines:
+        return "Локальные контакты не назначены."
+
+    return "\n".join(lines)
+
+
+def build_inspection_email_body(schedule_item, intro_message):
+    """
+    Генерирует полный текст письма.
+    :param schedule_item: объект Schedule
+    :param intro_message: Уникальное вступление (строка)
+    """
+    inspector = schedule_item.inspector
+    location = schedule_item.template.location
+    date_str = schedule_item.date.strftime("%d.%m.%Y")
+
+    # Получаем куски текста
+    contacts_text = _get_location_contacts_text(location)
+    chief_text = _get_production_chief_text()
+
+    # Собираем конструктор
+    return (
+        f"Здравствуйте, {inspector.first_name}!\n\n"
+        f"{intro_message}\n"  # <--- ВСТАВЛЯЕМ УНИКАЛЬНОЕ ВСТУПЛЕНИЕ
+        f"📅 Дата: {date_str}\n"
+        f"📍 Участок: {location.name}\n"
+        f"📋 Чек-лист: {schedule_item.template.name}\n\n"
+        f"--- КОНТАКТЫ ДЛЯ СВЯЗИ ---\n"
+        f"{contacts_text}\n"
+        f"{chief_text}\n\n"
+        f"------------------------\n"
+        f"Пожалуйста, не забудьте заполнить отчет в системе."
+    )
+
+
+def get_swap_notification_data(schedule_id):
+    """
+    Данные для уведомления о ЗАМЕНЕ.
+    """
+    try:
+        item = (
+            Schedule.objects.select_related(
+                "inspector",
+                "template",
+                "template__location",
+                "template__location__manager",
+                "template__location__deputy",
+                "template__location__senior_master",
+            )
+            .prefetch_related("template__location__masters")
+            .get(id=schedule_id)
+        )
+    except Schedule.DoesNotExist:
+        return None
+
+    if not item.inspector.email:
+        return None
+
+    # Уникальное сообщение для ЗАМЕНЫ
+    intro = "⚠️ ВНИМАНИЕ: Вам назначена новая проверка (в порядке замены)."
+
+    # Вызываем строитель
+    body = build_inspection_email_body(item, intro)
+
+    return {
+        "email": item.inspector.email,
+        "subject": f"⚡ Назначение замены: {item.template.location.name}",
+        "body": body,
+    }
+
+
 def prepare_daily_notifications(target_date=None):
+    """
+    Данные для ЕЖЕДНЕВНОЙ рассылки.
+    """
     if target_date is None:
         target_date = datetime.date.today()
 
-    # 1. ЗАГРУЖАЕМ РАСПИСАНИЕ (Твой код)
+    # 1. ЗАГРУЖАЕМ РАСПИСАНИЕ
     schedules = (
         Schedule.objects.filter(date=target_date)
         .select_related(
@@ -244,82 +366,20 @@ def prepare_daily_notifications(target_date=None):
         .prefetch_related("template__location__masters")
     )
 
-    # 2. НАХОДИМ НАЧАЛЬНИКА ПРОИЗВОДСТВА (ОДИН РАЗ)
-    # Берем первого активного пользователя с этой ролью
-    prod_chief = User.objects.filter(
-        role=User.ROLE_PRODUCTION_CHIEF, is_active=True
-    ).first()
-
-    # Заранее формируем текст про него, чтобы не делать это в цикле
-    chief_text = ""
-    if prod_chief:
-        c_phone = format_phone_number(prod_chief.phone) or "нет телефона"
-        chief_text = (
-            f"\n------------------------\n"
-            f"❗️ В случае отсутствия кого-то из руководителей производственного участка "
-            f"обращаться к Начальнику производства:\n"
-            f"{prod_chief.first_name} {prod_chief.last_name} (Тел: {c_phone})"
-        )
-
     notifications_data = []
-
     for item in schedules:
-        inspector = item.inspector
-        location = item.template.location
-
-        if not inspector.email:
+        if not item.inspector.email:
             continue
 
-        # --- СБОР КОНТАКТОВ УЧАСТКА (Локальные) ---
-        contacts_lines = []
+        intro = "Напоминаем, что у вас запланирована плановая проверка."
 
-        if location.manager:
-            contacts_lines.append(
-                f"👤 Начальник участка: {location.manager.first_name} {location.manager.last_name} ({format_phone_number(location.manager.phone)})"
-            )
-
-        if location.deputy:
-            contacts_lines.append(
-                f"👤 Зам. начальника: {location.deputy.first_name} {location.deputy.last_name} ({format_phone_number(location.deputy.phone)})"
-            )
-
-        if location.senior_master:
-            contacts_lines.append(
-                f"👷‍♂️ Старший мастер: {location.senior_master.first_name} {location.senior_master.last_name} ({format_phone_number(location.senior_master.phone)})"
-            )
-
-        masters = location.masters.all()
-        if masters:
-            contacts_lines.append("👷 Мастера:")
-            for m in masters:
-                contacts_lines.append(
-                    f"   - {m.first_name} {m.last_name} ({format_phone_number(m.phone)})"
-                )
-
-        local_contacts = (
-            "\n".join(contacts_lines)
-            if contacts_lines
-            else "Локальные контакты не назначены."
-        )
-
-        # --- ФОРМИРОВАНИЕ ПИСЬМА ---
-        # Добавляем chief_text в самый конец
-        email_body = (
-            f"Здравствуйте, {inspector.first_name}!\n\n"
-            f"⚠️ ВНИМАНИЕ: На {target_date.strftime('%d.%m.%Y')} вам назначена проверка.\n"
-            f"📍 Участок: {location.name}\n"
-            f"📋 Чек-лист: {item.template.name}\n\n"
-            f"--- КОНТАКТЫ ДЛЯ СВЯЗИ ---\n"
-            f"{local_contacts}\n"
-            f"{chief_text}\n\n"  # <--- ВСТАВЛЯЕМ ГЛОБАЛЬНОГО НАЧАЛЬНИКА ЗДЕСЬ
-            f"Пожалуйста, не забудьте заполнить отчет в системе."
-        )
+        body = build_inspection_email_body(item, intro)
 
         notifications_data.append(
             {
-                "recipient_email": inspector.email,
-                "subject": f"Напоминание о проверке: {location.name}",
-                "body": email_body,
+                "recipient_email": item.inspector.email,
+                "subject": f"Напоминание о проверке: {item.template.location.name}",
+                "body": body,
             }
         )
 
@@ -329,51 +389,3 @@ def prepare_daily_notifications(target_date=None):
     # Подмена для теста ПОТОМ удалить !!!
 
     return notifications_data
-
-
-def get_swap_notification_data(schedule_id):
-    """
-    Собирает данные для письма о назначении замены.
-    """
-    try:
-        # Тянем данные с оптимизацией
-        item = (
-            Schedule.objects.select_related(
-                "inspector",
-                "template",
-                "template__location",
-                "template__location__manager",
-            )
-            .prefetch_related("template__location__masters")
-            .get(id=schedule_id)
-        )
-    except Schedule.DoesNotExist:
-        return None
-
-    inspector = item.inspector
-    location = item.template.location
-
-    # Если нет email, слать некуда
-    if not inspector.email:
-        return None
-
-    manager_text, masters_block = get_data_information_about_department(location)
-
-    # Текст письма (Акцент на то, что это ЗАМЕНА)
-    email_body = (
-        f"Здравствуйте, {inspector.first_name}!\n\n"
-        f"⚠️ ВНИМАНИЕ: Вам назначена новая проверка (в порядке замены).\n"
-        f"📅 Дата: {item.date.strftime('%d.%m.%Y')}\n"
-        f"📍 Участок: {location.name}\n"
-        f"📋 Чек-лист: {item.template.name}\n\n"
-        f"--- КОНТАКТНЫЕ ЛИЦА ---\n"
-        f"Начальник:\n{manager_text}\n\n"
-        f"Мастера:\n{masters_block}\n\n"
-        f"Пожалуйста, не забудьте заполнить отчет в системе."
-    )
-
-    return {
-        "email": inspector.email,
-        "subject": f"⚡ Назначение замены: {location.name}",
-        "body": email_body,
-    }
