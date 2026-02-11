@@ -33,14 +33,21 @@ class User(AbstractUser):
     )
 
     ROLE_WORKER = "worker"
+    ROLE_MANAGER = "manager"
+    ROLE_DEPUTY = "deputy"
+    ROLE_SENIOR_MASTER = "senior_master"
     ROLE_MASTER = "master"
-    ROLE_MANAGER = "manager"  # <--- 1. НОВАЯ КОНСТАНТА
+
+    ROLE_PRODUCTION_CHIEF = "production_chief"
     ROLE_ADMIN = "admin"
 
     ROLE_CHOICES = [
         (ROLE_WORKER, "Сотрудник"),
+        (ROLE_MANAGER, "Начальник участка"),
+        (ROLE_DEPUTY, "Заместитель начальника"),
+        (ROLE_SENIOR_MASTER, "Старший мастер"),
         (ROLE_MASTER, "Мастер участка"),
-        (ROLE_MANAGER, "Начальник участка"),  # <--- 2. НОВЫЙ ВАРИАНТ
+        (ROLE_PRODUCTION_CHIEF, "Начальник производства"),
         (ROLE_ADMIN, "Администратор"),
     ]
 

@@ -2,6 +2,7 @@ from celery import shared_task
 from django.contrib.auth import get_user_model
 
 from checklists.tasks import send_email
+from checklists.utils import format_phone_number
 
 User = get_user_model()
 
@@ -23,7 +24,7 @@ def notify_admins_about_registration(new_user_id):
             f"Зарегистрировался новый сотрудник:\n\n"
             f"ФИО: {new_user.first_name} {new_user.last_name}\n"
             f"Email: {new_user.email}\n"
-            f"Телефон: {new_user.phone if new_user.phone else 'Не указан'}\n\n"
+            f"Телефон: {format_phone_number(new_user.phone) if new_user.phone else 'Не указан'}\n\n"
             f"Пожалуйста, зайдите в админку, чтобы выдать ему права (допуск к проверкам)."
         )
 

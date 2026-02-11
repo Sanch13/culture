@@ -12,7 +12,7 @@ from checklists.models import (
     ChecklistTemplate,
     SwapLog,
 )
-from checklists.utils import get_data_information_about_department
+from checklists.utils import get_data_information_about_department, format_phone_number
 
 User = get_user_model()
 
@@ -227,27 +227,39 @@ def perform_auto_swap(schedule_item, reason):
 
 
 def prepare_daily_notifications(target_date=None):
-    """
-    Собирает данные для рассылки уведомлений на заданную дату.
-    """
     if target_date is None:
         target_date = datetime.date.today()
 
-    # 1. Ищем расписание на сегодня.
-    # Оптимизация (Join): сразу тянем данные инспектора, шаблона, участка и начальника участка
+    # 1. ЗАГРУЖАЕМ РАСПИСАНИЕ (Твой код)
     schedules = (
         Schedule.objects.filter(date=target_date)
         .select_related(
             "inspector",
             "template",
             "template__location",
-            "template__location__manager",  # Сразу достаем начальника
+            "template__location__manager",
+            "template__location__deputy",
+            "template__location__senior_master",
         )
-        .prefetch_related(
-            # Оптимизация (Prefetch): отдельно эффективно загружаем список мастеров
-            "template__location__masters"
-        )
+        .prefetch_related("template__location__masters")
     )
+
+    # 2. НАХОДИМ НАЧАЛЬНИКА ПРОИЗВОДСТВА (ОДИН РАЗ)
+    # Берем первого активного пользователя с этой ролью
+    prod_chief = User.objects.filter(
+        role=User.ROLE_PRODUCTION_CHIEF, is_active=True
+    ).first()
+
+    # Заранее формируем текст про него, чтобы не делать это в цикле
+    chief_text = ""
+    if prod_chief:
+        c_phone = format_phone_number(prod_chief.phone) or "нет телефона"
+        chief_text = (
+            f"\n------------------------\n"
+            f"❗️ В случае отсутствия кого-то из руководителей производственного участка "
+            f"обращаться к Начальнику производства:\n"
+            f"{prod_chief.first_name} {prod_chief.last_name} (Тел: {c_phone})"
+        )
 
     notifications_data = []
 
@@ -255,25 +267,54 @@ def prepare_daily_notifications(target_date=None):
         inspector = item.inspector
         location = item.template.location
 
-        # Если у инспектора нет email, пропускаем (логируем ошибку в реальном проекте)
         if not inspector.email:
             continue
 
-        manager_text, masters_block = get_data_information_about_department(location)
+        # --- СБОР КОНТАКТОВ УЧАСТКА (Локальные) ---
+        contacts_lines = []
 
-        # Формируем тело письма
+        if location.manager:
+            contacts_lines.append(
+                f"👤 Начальник участка: {location.manager.first_name} {location.manager.last_name} ({format_phone_number(location.manager.phone)})"
+            )
+
+        if location.deputy:
+            contacts_lines.append(
+                f"👤 Зам. начальника: {location.deputy.first_name} {location.deputy.last_name} ({format_phone_number(location.deputy.phone)})"
+            )
+
+        if location.senior_master:
+            contacts_lines.append(
+                f"👷‍♂️ Старший мастер: {location.senior_master.first_name} {location.senior_master.last_name} ({format_phone_number(location.senior_master.phone)})"
+            )
+
+        masters = location.masters.all()
+        if masters:
+            contacts_lines.append("👷 Мастера:")
+            for m in masters:
+                contacts_lines.append(
+                    f"   - {m.first_name} {m.last_name} ({format_phone_number(m.phone)})"
+                )
+
+        local_contacts = (
+            "\n".join(contacts_lines)
+            if contacts_lines
+            else "Локальные контакты не назначены."
+        )
+
+        # --- ФОРМИРОВАНИЕ ПИСЬМА ---
+        # Добавляем chief_text в самый конец
         email_body = (
             f"Здравствуйте, {inspector.first_name}!\n\n"
             f"⚠️ ВНИМАНИЕ: На {target_date.strftime('%d.%m.%Y')} вам назначена проверка.\n"
             f"📍 Участок: {location.name}\n"
             f"📋 Чек-лист: {item.template.name}\n\n"
-            f"--- КОНТАКТЫ УЧАСТКА ---\n"
-            f"Начальник:\n{manager_text}\n\n"
-            f"Мастера:\n{masters_block}\n\n"
+            f"--- КОНТАКТЫ ДЛЯ СВЯЗИ ---\n"
+            f"{local_contacts}\n"
+            f"{chief_text}\n\n"  # <--- ВСТАВЛЯЕМ ГЛОБАЛЬНОГО НАЧАЛЬНИКА ЗДЕСЬ
             f"Пожалуйста, не забудьте заполнить отчет в системе."
         )
 
-        # Добавляем в список задач на отправку
         notifications_data.append(
             {
                 "recipient_email": inspector.email,
