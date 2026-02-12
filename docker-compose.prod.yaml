@@ -72,7 +72,7 @@ services:
       - local
 
   nginx:
-    image: nginx:latest
+    image: nginx:1.29-alpine
     container_name: nginx_proxy
     ports:
       - "80:80"

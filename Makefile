@@ -8,7 +8,7 @@ LOCAL_FILE = docker-compose.local.yml
 STORAGES_FILE = docker_compose/storages.yaml
 APP_CONTAINER = web
 SERVICE_NAME = web
-IMAGE = miran2025/culture:0.0.2
+IMAGE = miran2025/culture:0.0.3
 
 .PHONY: app-logs
 app-logs:
