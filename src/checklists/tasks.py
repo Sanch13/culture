@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from django.utils import timezone
 from django.conf import settings
+from django.contrib.auth import get_user_model
 
 from celery import shared_task
 
@@ -12,6 +13,8 @@ from checklists.services import (
     prepare_daily_notifications,
     get_swap_notification_data,
 )
+
+User = get_user_model()
 
 
 @shared_task
@@ -111,3 +114,17 @@ def notify_user_about_swap(schedule_id):
         return f"Sent swap email to {data['email']}"
 
     return "No email sent (invalid data or no email)"
+
+
+@shared_task
+def notify_admin_about_swap(message):
+    """
+    Задача: Уведомить админа, что произошел обмен сменами.
+    """
+
+    admins = User.objects.filter(role=User.ROLE_ADMIN)
+    for admin in admins:
+        if admin.email:
+            send_email.delay(to=admin.email, subject="Автозамена", body=message)
+
+    return f"Sent swap email to {admins}"

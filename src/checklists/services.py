@@ -220,9 +220,15 @@ def perform_auto_swap(schedule_item, reason):
             reason=reason,
         )
 
+    info_about_change = (
+        f"Дата: {current_date}.\nПроверяющий {current_user.last_name} {current_user.first_name}"
+        f" заменился на {target_user.last_name} {target_user.first_name}.\nПричина: {reason}"
+    )
+
     return (
         True,
         f"Обмен выполнен. Вы перенесены на {target_date}. Вместо вас выйдет {target_user.last_name}.",
+        info_about_change,
     )
 
 

@@ -12,8 +12,6 @@ def notify_admins_about_registration(new_user_id):
     """
     Находит всех админов и шлет им уведомление о новом пользователе.
     """
-    User = get_user_model()
-
     try:
         # 1. Получаем данные нового пользователя
         new_user = User.objects.get(id=new_user_id)
