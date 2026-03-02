@@ -26,22 +26,18 @@ class Location(models.Model):
         limit_choices_to={"role": "manager"},  # <--- ФИЛЬТР
     )
 
-    # 2. Заместитель (ROLE_DEPUTY)
-    deputy = models.ForeignKey(
+    # Заместители (МНОГО)
+    deputies = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="deputy_locations",
-        verbose_name="Заместитель начальника",
+        verbose_name="Заместители начальника",
         limit_choices_to={"role": "deputy"},  # Фильтр в админке
     )
 
-    # 3. Старший мастер (ROLE_SENIOR_MASTER)
-    senior_master = models.ForeignKey(
+    # Старшие мастера (МНОГО)
+    senior_masters = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="senior_master_locations",
         verbose_name="Старший мастер",

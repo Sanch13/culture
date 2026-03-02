@@ -253,26 +253,34 @@ def _get_production_chief_text():
 
 def _get_location_contacts_text(location):
     """
-    Собирает контакты участка (Начальник, Зам, Ст. мастер, Мастера).
+    Собирает контакты участка (Начальник, Замы, Ст. мастера, Мастера).
     """
     lines = []
 
-    # 1. Руководство
+    # 1. Начальник участка (Один)
     if location.manager:
         p = format_phone_number(location.manager.phone)
         lines.append(f"👤 Начальник участка: {location.manager.get_full_name()} ({p})")
 
-    if location.deputy:
-        p = format_phone_number(location.deputy.phone)
-        lines.append(f"👤 Зам. начальника: {location.deputy.get_full_name()} ({p})")
+    # 2. Заместители (Много)
+    # Используем .all() так как теперь это ManyToMany
+    deputies = location.deputies.all()
+    if deputies:
+        # Если зам один - пишем красиво в одну строку (опционально), но проще списком
+        lines.append("👤 Заместители начальника:")
+        for dep in deputies:
+            p = format_phone_number(dep.phone)
+            lines.append(f"   - {dep.get_full_name()} ({p})")
 
-    if location.senior_master:
-        p = format_phone_number(location.senior_master.phone)
-        lines.append(
-            f"👷‍♂️ Старший мастер: {location.senior_master.get_full_name()} ({p})"
-        )
+    # 3. Старшие мастера (Много)
+    senior_masters = location.senior_masters.all()
+    if senior_masters:
+        lines.append("👷‍♂️ Старшие мастера:")
+        for sm in senior_masters:
+            p = format_phone_number(sm.phone)
+            lines.append(f"   - {sm.get_full_name()} ({p})")
 
-    # 2. Мастера
+    # 4. Мастера (Много)
     masters = location.masters.all()
     if masters:
         lines.append("👷 Мастера:")
@@ -321,15 +329,20 @@ def get_swap_notification_data(schedule_id):
     """
     try:
         item = (
-            Schedule.objects.select_related(
+            Schedule.objects
+            # FK (Один объект): Инспектор, Шаблон, Участок, Начальник участка
+            .select_related(
                 "inspector",
                 "template",
                 "template__location",
                 "template__location__manager",
-                "template__location__deputy",
-                "template__location__senior_master",
             )
-            .prefetch_related("template__location__masters")
+            # M2M (Списки): Мастера, Заместители, Ст. мастера
+            .prefetch_related(
+                "template__location__masters",
+                "template__location__deputies",  # <--- Перенесли сюда
+                "template__location__senior_masters",  # <--- Перенесли сюда
+            )
             .get(id=schedule_id)
         )
     except Schedule.DoesNotExist:
@@ -366,10 +379,12 @@ def prepare_daily_notifications(target_date=None):
             "template",
             "template__location",
             "template__location__manager",
-            "template__location__deputy",
-            "template__location__senior_master",
         )
-        .prefetch_related("template__location__masters")
+        .prefetch_related(
+            "template__location__masters",
+            "template__location__deputies",  # <--- ДОБАВИЛИ СЮДА
+            "template__location__senior_masters",  # <--- ДОБАВИЛИ СЮДА
+        )
     )
 
     notifications_data = []
