@@ -6,108 +6,111 @@
     <!-- ====================================================== -->
     <!-- БЛОК 1: АКТУАЛЬНОЕ ЗАДАНИЕ -->
     <!-- ====================================================== -->
-    {% if task %}
-        <h4 class="mb-3 mt-4 text-secondary">📅 Ваш график на эту неделю</h4>
 
-        <div class="card shadow-sm border-primary mb-5">
-            <div class="card-body text-center p-4 p-md-5">
+    {% if today_tasks %}
+        <!-- СЦЕНАРИЙ: СЕГОДНЯ ЕСТЬ РАБОТА -->
+        <h4 class="mb-3 text-secondary">📅 Ваши задания на сегодня ({{ today_tasks|length }} шт.)</h4>
 
-                {% if task.inspection.is_completed %}
-                    <!-- Сценарий: Все сделано -->
-                    <h6 class="text-uppercase text-success fw-bold mb-2">
-                        <i class="bi bi-check-circle-fill"></i> Проверка выполнена
-                    </h6>
-                {% elif is_today %}
-                    <!-- Сценарий: Сегодня, но еще не сделано -->
-                    <h6 class="text-uppercase text-danger fw-bold mb-2">
-                        🔥 Требуется проверка СЕГОДНЯ
-                    </h6>
-                {% else %}
-                    <!-- Сценарий: Будущее -->
-                    <h6 class="text-uppercase text-primary fw-bold mb-2">
-                        🔜 Плановая проверка: {{ task.date|date:"l, d E" }}
-                    </h6>
-                    <p class="text-muted mb-2">
-                        (Через {{ days_until }} дн.)
-                    </p>
-                {% endif %}
+        <!-- СЕТКА КАРТОЧЕК -->
+        <div class="row row-cols-1 {% if today_tasks|length > 1 %}row-cols-md-2{% endif %} g-4 mb-4">
+            {% for task in today_tasks %}
+                <div class="col">
+                    <div class="card shadow-sm border-primary h-100 d-flex flex-column">
+                        <div class="card-body text-center p-4 d-flex flex-column flex-grow-1">
 
-                <h1 class="display-6 text-dark mb-3">{{ task.template.name }}</h1>
-                <p class="lead text-muted">📍 {{ task.template.location.name }}</p>
+                            <h2 class="text-primary mb-2">{{ task.template.name }}</h2>
+                            <p class="text-muted flex-grow-1">📍 {{ task.template.location.name }}</p>
+                            <hr>
 
-                <hr class="my-4">
+                            <!-- КНОПКА ДЕЙСТВИЯ (ТОЛЬКО СИНЯЯ/ЖЕЛТАЯ/ЗЕЛЕНАЯ) -->
+                            <div class="mt-auto">
+                                {% if task.inspection %}
+                                    {% if task.inspection.is_completed %}
+                                        <button class="btn btn-success btn-lg w-100" disabled>✅ Выполнено</button>
+                                    {% else %}
+                                        <a href="{% url 'inspection_form' task.inspection.id %}" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm">
+                                            ✏️ Продолжить
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    <!-- Кнопка Начать -->
+                                    <form action="{% url 'start_inspection' task.template.id %}" method="post" class="w-100">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
+                                            🚀 Начать проверку
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
 
-                <!-- ЛОГИКА КНОПОК -->
-                {% if task.inspection %}
-                    <!-- Проверка уже начата -->
-                    {% if task.inspection.is_completed %}
-                        <button class="btn btn-success btn-lg px-5 w-100" disabled>
-                            ✅ Задание выполнено
-                        </button>
-                    {% else %}
-                        <a href="{% url 'inspection_form' task.inspection.id %}" class="btn btn-warning btn-lg px-5 fw-bold w-100 shadow-sm" style="max-width: 400px;">
-                            ✏️ Продолжить выполнение
-                        </a>
-                        <p class="mt-3 text-muted small">
-                            <i class="bi bi-lock-fill"></i> Вы начали эту проверку. Автозамена недоступна.
-                        </p>
-                    {% endif %}
-
-                {% else %}
-                    <!-- Проверка еще не начата -->
-                    <div class="d-flex flex-column gap-3 align-items-center justify-content-center">
-
-                        <form action="{% url 'start_inspection' task.template.id %}" method="post" class="w-100" style="max-width: 400px;">
-                            {% csrf_token %}
-                            {% if is_today %}
-                                <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
-                                    🚀 Начать проверку
-                                </button>
-                            {% else %}
-                                <button type="button" class="btn btn-secondary btn-lg w-100 fw-bold" disabled>
-                                    ⏳ Будет доступно {{ task.date|date:"d.m.Y" }}
-                                </button>
-                            {% endif %}
-                        </form>
-
-                        <div class="text-muted small">- ИЛИ -</div>
-
-                        <button type="button" class="btn btn-outline-danger w-100" style="max-width: 400px;"
-                                data-bs-toggle="modal" data-bs-target="#swapModal">
-                            🔄 Не могу выполнить (Автозамена)
-                        </button>
+                        </div>
                     </div>
-                {% endif %}
-            </div>
+                </div>
+            {% endfor %}
         </div>
 
-        <!-- МОДАЛЬНОЕ ОКНО (Оно относится к дашборду, поэтому оставляем здесь) -->
-        <div class="modal fade" id="swapModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title">⛔ Отказ от смены</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <form action="{% url 'auto_swap_shift' task.id %}" method="post">
-                        {% csrf_token %}
-                        <div class="modal-body text-start">
-                            <p>Вы собираетесь перенести проверку <strong>{{ task.date|date:"d.m.Y" }}</strong> на следующую неделю.</p>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Причина:</label>
-                                <textarea class="form-control" name="reason" rows="3" required></textarea>
+        <!-- ОДНА ОБЩАЯ КНОПКА АВТОЗАМЕНЫ (ВНИЗУ, ШИРОКАЯ) -->
+        {% if can_swap_today %}
+            <!-- Обертка w-100 делает кнопку шириной точно по границам сетки карточек -->
+            <div class="w-100 mb-5">
+                <button type="button" class="btn btn-outline-danger btn-lg w-100 fw-bold shadow-sm"
+                        data-bs-toggle="modal" data-bs-target="#swapModal">
+                    🔄 Не могу выполнить проверку (Автозамена)
+                </button>
+            </div>
+
+            <!-- МОДАЛКА (ОДНА НА ВСЕ КАРТОЧКИ) -->
+            <div class="modal fade" id="swapModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title">Отказ от смены</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <!-- Передаем ID ПЕРВОЙ задачи (today_tasks.0.id), бэкенд поменяет весь день -->
+                        <form action="{% url 'auto_swap_shift' today_tasks.0.id %}" method="post">
+                            {% csrf_token %}
+                            <div class="modal-body text-start">
+                                {% if today_tasks|length > 1 %}
+                                    <div class="alert alert-warning small">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        Вы отказываетесь от <strong>ВСЕХ ({{ today_tasks|length }})</strong> проверок, назначенных на сегодня.
+                                    </div>
+                                {% else %}
+                                    <p>Вы собираетесь перенести эту проверку на другую дату.</p>
+                                {% endif %}
+
+                                <label class="form-label fw-bold">Причина замены (Обязательно):</label>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Больничный, отгул..."></textarea>
                             </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                            <button type="submit" class="btn btn-danger">Подтвердить</button>
-                        </div>
-                    </form>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="submit" class="btn btn-danger">Подтвердить замену</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
-        </div>
 
+        {% else %}
+            <!-- Информационное сообщение (появляется, когда кнопка исчезла) -->
+            <div class="text-center text-muted small mb-5">
+                <i class="bi bi-lock-fill"></i> Проверка начата. Автозамена недоступна.
+            </div>
+        {% endif %}
+
+
+    {% elif future_task %}
+        <!-- СЦЕНАРИЙ: БУДУЩЕЕ -->
+        <div class="alert alert-primary text-center p-5 border shadow-sm mb-5">
+            <h1 class="text-primary display-4">⏳</h1>
+            <h3>Сегодня заданий нет</h3>
+            <p class="lead">Ближайшая проверка: <strong>{{ future_task.date|date:"l, d E" }}</strong></p>
+            <p class="text-muted">(Через {{ days_until }} дн.)</p>
+        </div>
     {% else %}
+        <!-- СЦЕНАРИЙ: ПУСТО -->
         <div class="alert alert-light text-center p-5 border shadow-sm mb-5 mt-4">
             <h1 class="text-muted display-4">☕️</h1>
             <h3>На этой неделе проверок нет</h3>

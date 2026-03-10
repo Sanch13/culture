@@ -129,31 +129,32 @@ def toggle_employee_permission(request, user_id):
 @admin_required
 @require_GET
 def api_get_swap_candidates(request):
-    """
-    API: Возвращает список смен, доступных для обмена,
-    которые идут СТРОГО ПОЗЖЕ переданной даты.
-    """
-    source_date_str = request.GET.get("date")  # Ожидаем формат YYYY-MM-DD
+    source_date_str = request.GET.get("date")
 
     if not source_date_str:
         return JsonResponse({"error": "Date is required"}, status=400)
 
-    # Ищем смены позже указанной даты
-    candidates = (
+    # Ищем уникальные комбинации (Дата + Инспектор) в будущем
+    candidates_data = (
         Schedule.objects.filter(
-            date__gt=source_date_str,  # Строго больше даты исходной смены
-            inspection__isnull=True,  # Еще не выполнено
-            is_swapped=False,  # Еще не менялись
+            date__gt=source_date_str,
+            inspection__isnull=True,
+            is_swapped=False,
         )
-        .select_related("inspector", "template__location")
+        # Группируем, чтобы избежать дублей (если у человека 2 смены в день)
+        .values(
+            "date", "inspector__id", "inspector__last_name", "inspector__first_name"
+        )
+        .distinct()
         .order_by("date", "inspector__last_name")
     )
 
     data = []
-    for item in candidates:
-        # Формируем красивую строку для селекта
-        label = f"📅 {item.date.strftime('%d.%m')} — {item.inspector.last_name} {item.inspector.first_name}"
-        # label = f"📅 {item.date.strftime('%d.%m')} — {item.inspector.last_name} {item.inspector.first_name}. ({item.template.location.name[:20]})"
-        data.append({"id": item.id, "label": label})
+    for item in candidates_data:
+        # value: "2025-12-15|5" (Дата | ID инспектора)
+        value_key = f"{item['date']}|{item['inspector__id']}"
+        label = f"📅 {item['date'].strftime('%d.%m')} — {item['inspector__last_name']} {item['inspector__first_name']}"
+
+        data.append({"id": value_key, "label": label})
 
     return JsonResponse({"candidates": data})

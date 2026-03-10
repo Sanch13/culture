@@ -2,6 +2,9 @@ from functools import wraps
 
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import redirect_to_login
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 def admin_required(view_func):
@@ -18,7 +21,7 @@ def admin_required(view_func):
             return redirect_to_login(request.get_full_path())
 
         # Главная проверка: Роль или статус Staff
-        if request.user.is_staff or request.user.role in ["admin", "master"]:
+        if request.user.is_staff or request.user.role == User.ROLE_ADMIN:
             return view_func(request, *args, **kwargs)
 
         # Если не прошел проверку - ЖЕСТКИЙ ОТКАЗ
@@ -38,9 +41,7 @@ def employee_required(view_func):
         if not request.user.is_authenticated:
             return redirect_to_login(request.get_full_path())
 
-        # Проверка: Должен быть именно worker
-        if request.user.role == "worker":
-            return view_func(request, *args, **kwargs)
+        return view_func(request, *args, **kwargs)
 
         # Админам тут делать нечего
         raise PermissionDenied("Этот раздел только для исполнителей работ.")

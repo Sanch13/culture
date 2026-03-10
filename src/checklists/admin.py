@@ -10,6 +10,7 @@ from checklists.models import (
     InspectionItem,
     ViolationPhoto,
     Schedule,
+    InspectionRoute,
 )
 
 
@@ -67,6 +68,17 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     pass
+
+
+@admin.register(InspectionRoute)
+class InspectionRouteAdmin(admin.ModelAdmin):
+    list_display = ("title", "order", "templates_count")
+    filter_horizontal = ("templates",)  # Удобный виджет для выбора шаблонов
+
+    def templates_count(self, obj):
+        return obj.templates.count()
+
+    templates_count.short_description = "Шаблонов"
 
 
 # --- Настройка Журнала проверок ---

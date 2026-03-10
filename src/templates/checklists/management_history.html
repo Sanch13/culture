@@ -1,16 +1,17 @@
-{% extends 'base_admin.html' %}
+{% extends 'base_user.html' %}
 
-{% block title %}Журнал проверок{% endblock %}
+{% block title %}Отчеты участка{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3">🗂 Журнал проверок</h1>
+    <h1 class="h3">📊 Журнал проверок</h1>
 </div>
 
 <!-- ФИЛЬТРЫ -->
 <div class="card shadow-sm mb-4 border-0 bg-light">
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
+
             <!-- Дата С -->
             <div class="col-md-3">
                 <label class="form-label small fw-bold">Дата с:</label>
@@ -35,8 +36,7 @@
 
             <!-- Кнопки -->
             <div class="col-md-3 text-end">
-                <!-- Ссылка для сброса ведет на саму себя без параметров -->
-                <a href="{% url 'admin_history' %}" class="btn btn-outline-secondary me-2">Сброс</a>
+                <a href="{% url 'management_reports' %}" class="btn btn-outline-secondary me-2">Сброс</a>
                 <button type="submit" class="btn btn-primary px-4">Применить</button>
             </div>
         </form>
@@ -50,44 +50,31 @@
             <table class="table table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>ID</th>
                         <th>Дата</th>
                         <th>Участок</th>
                         <th>Шаблон</th>
-                        <th>Итог</th>
-                        <th style="min-width: 250px;">Проверяющий</th>
-                        <th>Действие</th>
+                        <th>Результат</th>
+                        <th>Инспектор</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- ВАЖНО: Теперь мы перебираем page_obj, а не inspections -->
-                    {% for inspection in page_obj %}
-                    <tr class="{% if inspection.violation_count == 0 %}table-success{% else %}table-danger{% endif %}">
-                        <td>#{{ inspection.id }}</td>
-                        <td>{{ inspection.date_check|date:"d.m.Y" }}</td>
-                        <td>{{ inspection.location_snapshot }}</td>
-                        <td>{{ inspection.template.name }}</td>
-
-                        <!-- КОЛОНКА ИТОГ -->
+                    {% for item in page_obj %} <!-- Теперь перебираем page_obj -->
+                    <tr class="{% if item.violation_count > 0 %}table-danger{% else %}table-success{% endif %} bg-opacity-10">
+                        <!-- ... (Ячейки таблицы те же самые) ... -->
+                        <td>{{ item.date_check|date:"d.m.Y" }}</td>
+                        <td>{{ item.template.location.name }}</td>
+                        <td class="text-muted small">{{ item.template.name }}</td>
                         <td>
-                            {% if inspection.violation_count == 0 %}
-                                <span class="badge bg-success"><i class="bi bi-check-lg"></i> Идеально</span>
+                            {% if item.violation_count == 0 %}
+                                <span class="badge bg-success">ОК</span>
                             {% else %}
-                                <span class="badge bg-danger">Нарушений: {{ inspection.violation_count }}</span>
+                                <span class="badge bg-danger">Нарушений: {{ item.violation_count }}</span>
                             {% endif %}
                         </td>
-
-                        <!-- ПРОВЕРЯЮЩИЙ -->
-                        <td>
-                            <div class="fw-bold text-nowrap">{{ inspection.inspector.get_full_name }}</div>
-                            <div class="small text-muted">{{ inspection.inspector.email }}</div>
-                        </td>
-
-                        <!-- ДЕЙСТВИЕ -->
-                        <td>
-                            <a href="{% url 'admin_report_detail' inspection.id %}" class="btn btn-sm btn-light border shadow-sm">
-                                Открыть
-                            </a>
+                        <td>{{ item.inspector.last_name }} {{ item.inspector.first_name|slice:":1" }}.</td>
+                        <td class="text-end">
+                            <a href="{% url 'management_report_detail' item.id %}" class="btn btn-sm btn-outline-primary">Открыть</a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -115,7 +102,6 @@
         </div>
     </div>
 {% else %}
-    <!-- ЕСЛИ НИЧЕГО НЕ НАЙДЕНО ПО ФИЛЬТРУ -->
     <div class="alert alert-info text-center p-5">
         <h4>Ничего не найдено</h4>
         <p>По вашему запросу отчетов не найдено.</p>

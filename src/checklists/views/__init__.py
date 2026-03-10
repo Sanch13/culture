@@ -16,6 +16,8 @@ from checklists.views.employee_cabinet import (
     inspection_form_view,
     start_inspection_view,
     auto_swap_shift,
+    management_reports_list,
+    management_inspection_detail,
 )
 from checklists.views.api import (
     upload_photo_ajax,
@@ -42,6 +44,8 @@ __all__ = (
     "inspection_form_view",
     "start_inspection_view",
     "auto_swap_shift",
+    "management_reports_list",
+    "management_inspection_detail",
     "upload_photo_ajax",
     "delete_photo_ajax",
     "save_comment_ajax",

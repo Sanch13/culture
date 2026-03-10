@@ -10,12 +10,13 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 
 from checklists.decorators import admin_required
-from checklists.services import generate_schedule
+from checklists.services import generate_schedule, apply_inspection_filters_and_paginate
 from checklists.models import (
     ChecklistTemplate,
     Inspection,
     Schedule,
     SwapLog,
+    InspectionRoute,
 )
 from checklists.tasks import notify_user_about_swap
 
@@ -50,19 +51,17 @@ def admin_inspection_list(request):
     """
     Журнал всех завершенных проверок.
     """
-    # Берем только завершенные, сортируем: свежие сверху.
-    # select_related ускоряет загрузку (подтягивает юзера и шаблон сразу)
-    inspections = (
+    # 1. Базовый запрос (Все завершенные отчеты)
+    queryset = (
         Inspection.objects.filter(is_completed=True)
         .select_related("inspector", "template")
-        .annotate(
-            # Считаем количество пунктов, где is_compliant = False
-            violation_count=Count("items", filter=Q(items__is_compliant=False))
-        )
+        .annotate(violation_count=Count("items", filter=Q(items__is_compliant=False)))
         .order_by("-date_check", "-created_at")
     )
 
-    context = {"inspections": inspections}
+    # 2. Вызываем наш сервис фильтрации
+    context = apply_inspection_filters_and_paginate(request, queryset)
+
     return render(request, "checklists/admin_history.html", context)
 
 
@@ -96,48 +95,92 @@ def admin_inspection_detail(request, inspection_id):
 @admin_required
 def admin_weekly_schedule(request):
     today = timezone.now().date()
-    start_of_current_week = today - timedelta(
-        days=today.weekday()
-    )  # Понедельник текущей недели
+    start_of_current_week = today - timedelta(days=today.weekday())
 
-    # Загружаем шаблоны (они одинаковы для всех недель)
-    templates = ChecklistTemplate.objects.all().order_by("id")
+    # 1. Загружаем МАРШРУТЫ
+    routes = (
+        InspectionRoute.objects.all().order_by("order").prefetch_related("templates")
+    )
 
-    # Загружаем ВСЕ расписание на 3 недели вперед одним запросом (оптимизация)
-    # 3 недели * 7 дней = 21 день
+    # 2. Загружаем расписание на 3 недели
     end_date = start_of_current_week + timedelta(days=21)
 
     all_schedules = Schedule.objects.filter(
         date__range=[start_of_current_week, end_date]
-    ).select_related("inspector", "inspection")
+    ).select_related("inspector", "inspection", "template")
 
-    # Создаем карту для быстрого поиска: {(template_id, date): schedule_item}
-    schedule_map = {(item.template_id, item.date): item for item in all_schedules}
+    # 3. Создаем карту маршрутов: {template_id: route_id}
+    tmpl_to_route = {}
+    for r in routes:
+        for t in r.templates.all():
+            tmpl_to_route[t.id] = r.id
 
-    # Генерируем данные для 3-х недель
+    # 4. Группируем Schedule по (route_id, date)
+    # Теперь значением в словаре будет СПИСОК объектов Schedule
+    schedule_map = {}
+    for item in all_schedules:
+        route_id = tmpl_to_route.get(item.template_id)
+        if route_id:
+            key = (route_id, item.date)
+            if key not in schedule_map:
+                schedule_map[key] = []
+            schedule_map[key].append(item)
+
+    # 5. Генерируем данные для 3-х недель
     weeks_data = []
 
-    for i in range(3):  # 0, 1, 2
-        # Начало конкретной недели (сдвиг на i * 7 дней)
+    for i in range(3):
         week_start = start_of_current_week + timedelta(weeks=i)
-
-        # Генерируем дни Пн-Пт для этой недели
         week_days = [week_start + timedelta(days=d) for d in range(5)]
 
-        # Собираем строки таблицы для этой недели
         rows = []
-        for tmpl in templates:
+        for route in routes:
             cells = []
             for day in week_days:
-                # Берем из общей карты
-                cells.append(schedule_map.get((tmpl.id, day)))
+                # Получаем СПИСОК всех заданий для этого маршрута в этот день
+                day_schedules = schedule_map.get((route.id, day))
 
-            rows.append({"template": tmpl, "cells": cells})
+                if day_schedules:
+                    # Анализируем статус всей пачки
+                    total_count = len(day_schedules)
 
-        # Добавляем неделю в общий список
+                    # Считаем, сколько завершено
+                    completed_count = sum(
+                        1
+                        for s in day_schedules
+                        if s.inspection and s.inspection.is_completed
+                    )
+
+                    # Статус маршрута:
+                    # True - если завершены ВСЕ отчеты маршрута
+                    # False - если есть хоть один недоделанный
+                    is_fully_completed = completed_count == total_count
+
+                    # Берем инспектора (он у всех задач в этот день один и тот же)
+                    inspector = day_schedules[0].inspector
+                    is_swapped = day_schedules[0].is_swapped
+
+                    # Кладем в ячейку умный объект
+                    cells.append(
+                        {
+                            "inspector": inspector,
+                            "is_fully_completed": is_fully_completed,
+                            "is_swapped": is_swapped,
+                            "total": total_count,
+                            "completed": completed_count,
+                            # Берем первую задачу просто чтобы передать её ID в модалку обмена
+                            "first_schedule_id": day_schedules[0].id,
+                            "date": day,
+                        }
+                    )
+                else:
+                    cells.append(None)
+
+            rows.append({"route": route, "cells": cells})
+
         weeks_data.append(
             {
-                "index": i,  # Для ID вкладок (0, 1, 2)
+                "index": i,
                 "title": "Текущая"
                 if i == 0
                 else ("Следующая" if i == 1 else "Через 2 недели"),
@@ -147,22 +190,10 @@ def admin_weekly_schedule(request):
                 "table_rows": rows,
             }
         )
-    # Нам нужны смены, начиная с ЗАВТРАШНЕГО дня, которые еще не выполнены.
-    # Мы будем предлагать их для обмена.
-    future_schedules = (
-        Schedule.objects.filter(
-            date__gt=today,  # Строго больше сегодня
-            inspection__isnull=True,  # Отчет еще не создан (не выполнено)
-            is_swapped=False,  # Исключаем тех, кто уже менялся (по твоему ТЗ)
-        )
-        .select_related("inspector", "template__location")
-        .order_by("date", "inspector__last_name")
-    )
 
     context = {
         "weeks_data": weeks_data,
         "today": today,
-        "future_schedules": future_schedules,
     }
     return render(request, "checklists/admin_schedule.html", context)
 
@@ -170,54 +201,75 @@ def admin_weekly_schedule(request):
 @admin_required
 @require_POST
 def admin_exchange_shifts(request):
-    # ID текущей смены (которую меняем)
-    current_schedule_id = request.POST.get("current_schedule_id")
-    # ID будущей смены (на которую меняем)
-    target_schedule_id = request.POST.get("target_schedule_id")
+    # 1. Получаем данные ИСХОДНОЙ смены (кто отдает)
+    source_date_str = request.POST.get("source_date")
+    source_inspector_id = request.POST.get("source_inspector_id")
 
-    # Получаем обе записи
-    current_sched = get_object_or_404(Schedule, id=current_schedule_id)
-    target_sched = get_object_or_404(Schedule, id=target_schedule_id)
+    # 2. Получаем данные ЦЕЛЕВОЙ смены (кто принимает)
+    target_value = request.POST.get("target_schedule_id")  # "2025-12-15|5"
 
-    # 3. Совершаем обмен
-    with transaction.atomic():
-        current_user = current_sched.inspector  # Тот, кто был сегодня
-        target_user = target_sched.inspector  # Тот, кто был завтра (донор)
+    if not all([source_date_str, source_inspector_id, target_value]):
+        messages.error(request, "Неполные данные для обмена.")
+        return redirect("admin_schedule")
 
-        current_date = current_sched.date
-        target_date = target_sched.date
+    try:
+        target_date_str, target_inspector_id = target_value.split("|")
+    except ValueError:
+        messages.error(request, "Ошибка формата целевой смены.")
+        return redirect("admin_schedule")
 
-        # === ЛОГИКА ОБМЕНА (SWAP) ===
-        # 1. Меняем инспекторов местами
-        current_sched.inspector = target_user
-        current_sched.is_swapped = False
+    # 3. ИЩЕМ ЗАДАЧИ
+    source_tasks = list(
+        Schedule.objects.filter(date=source_date_str, inspector_id=source_inspector_id)
+    )
+    target_tasks = list(
+        Schedule.objects.filter(date=target_date_str, inspector_id=target_inspector_id)
+    )
 
-        target_sched.inspector = current_user
-        target_sched.is_swapped = True
-
-        # 2. Сохраняем
-        current_sched.save()
-        target_sched.save()
-
-        # 3. Пишем лог (Один общий или два)
-        SwapLog.objects.create(
-            requestor=request.user,  # Админ
-            target_user=target_user,  # Кого поставили сегодня
-            source_date=current_date,
-            target_date=target_date,
-            reason=f"Обмен сменами с {current_user.last_name} ({current_date}) <-> {target_user.last_name} ({target_date})",
-        )
-
-        # 4. Уведомляем ОБОИХ сотрудников
-        # user_b теперь работает сегодня -> шлем ему письмо
-        notify_user_about_swap.delay(current_sched.id)
-
-        # user_a теперь работает завтра -> шлем ему письмо про завтра
-        # notify_user_about_swap.delay(target_sched.id)
-        messages.success(
+    if not source_tasks or not target_tasks:
+        messages.error(
             request,
-            f"Успешно: {target_user.last_name} выходит, {current_user.last_name} перенесен на {target_sched.date}.",
+            "Не удалось найти задачи для обмена (возможно они уже удалены или выполнены).",
         )
+        return redirect("admin_schedule")
+
+    # 4. СОВЕРШАЕМ ОБМЕН (Batch Swap)
+    with transaction.atomic():
+        # Получаем объекты пользователей для логов и уведомлений
+        source_user = source_tasks[0].inspector
+        target_user = target_tasks[0].inspector
+
+        # Меняем Исходных (отдаем целевому)
+        for t in source_tasks:
+            t.inspector = target_user
+            t.is_swapped = False  # Целевой теперь работает сегодня
+            t.save()
+
+        # Меняем Целевых (отдаем исходному)
+        for t in target_tasks:
+            t.inspector = source_user
+            t.is_swapped = True  # Исходный уехал в будущее, его больше не трогать
+            t.save()
+
+        # Пишем лог
+        SwapLog.objects.create(
+            requestor=request.user,
+            target_user=target_user,
+            source_date=source_date_str,
+            target_date=target_date_str,
+            reason=f"Обмен сменами {source_user.last_name} ({source_date_str}) <-> {target_user.last_name} ({target_date_str})",
+        )
+
+        # Уведомления (если нужно)
+        # target_user теперь назначен на source_date
+        notify_user_about_swap.delay(source_date_str, target_user.id)
+        # source_user теперь назначен на target_date
+        # notify_user_about_swap.delay(target_date_str, source_user.id)
+
+    messages.success(
+        request,
+        f"Успешный обмен: {target_user.last_name} выходит {source_date_str}, а {source_user.last_name} — {target_date_str}.",
+    )
     return redirect("admin_schedule")
 
 

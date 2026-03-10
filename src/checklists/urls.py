@@ -37,6 +37,14 @@ urlpatterns = [
         views.inspection_form_view,
         name="inspection_form",
     ),
+    path(
+        "management/reports/", views.management_reports_list, name="management_reports"
+    ),
+    path(
+        "management/report/<int:inspection_id>/",
+        views.management_inspection_detail,
+        name="management_report_detail",
+    ),
     # API
     path(
         "api/upload-photo/<int:item_id>/",

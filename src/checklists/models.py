@@ -128,6 +128,31 @@ class ChecklistCriteria(models.Model):
         verbose_name_plural = "Справочник: Критерии"
 
 
+class InspectionRoute(models.Model):
+    """
+    Маршрут обхода. Группирует несколько шаблонов, которые проверяются одним человеком за раз.
+    Например: "Маршрут ОРП УПП" (включает Раздув и ЦПМ).
+    """
+
+    title = models.CharField("Название маршрута", max_length=200)
+
+    # Связь Многие-ко-Многим: Один маршрут -> Много шаблонов
+    templates = models.ManyToManyField(
+        ChecklistTemplate, related_name="routes", verbose_name="Входящие шаблоны"
+    )
+
+    # Порядок для очереди генерации (какой маршрут первым, какой вторым)
+    order = models.PositiveIntegerField("Порядок очереди", default=0)
+
+    def __str__(self):
+        return f"{self.title} ({self.templates.count()} шт.)"
+
+    class Meta:
+        ordering = ["order"]
+        verbose_name = "Маршрут обхода"
+        verbose_name_plural = "Справочник: Маршруты"
+
+
 # ==========================================
 # БЛОК 2: ОПЕРАЦИОННЫЕ ДАННЫЕ (Отчеты)
 # ==========================================

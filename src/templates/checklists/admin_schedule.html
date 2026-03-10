@@ -99,33 +99,43 @@
                             <tr>
                                 <!-- Участок -->
                                 <td class="text-start fw-bold bg-light">
-                                    {{ row.template.location.name }}<br>
-                                    <small class="text-muted fw-normal">{{ row.template.name }}</small>
+                                    {{ row.route.title }}
+                                    <!-- Можно вывести список шаблонов мелким шрифтом при наведении -->
+                                    <i class="bi bi-info-circle text-muted ms-1"
+                                       title="{% for t in row.route.templates.all %}{{ t.name }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                                    </i>
                                 </td>
 
                                 <!-- Ячейки дней -->
                                 {% for cell in row.cells %}
                                     {% if cell %}
-                                        <td class="{% if cell.inspection.is_completed %}bg-success bg-opacity-25{% else %}bg-danger bg-opacity-10{% endif %}">
+                                        <!-- Цвет зависит от 100% выполнения -->
+                                        <td class="{% if cell.is_fully_completed %}bg-success bg-opacity-25{% else %}bg-danger bg-opacity-10{% endif %}">
+
+                                            <!-- ФИО Инспектора -->
                                             <div class="fw-bold small">
                                                 {{ cell.inspector.last_name }} {{ cell.inspector.first_name|slice:":1" }}.
                                             </div>
+
+                                            <!-- Статус с прогрессом -->
                                             <div class="mt-1">
-                                                {% if cell.inspection.is_completed %}
-                                                    <a href="{% url 'admin_report_detail' cell.inspection.id %}" class="badge bg-success text-decoration-none">✅ Сдано</a>
+                                                {% if cell.is_fully_completed %}
+                                                    <span class="badge bg-success">✅ Сдано ({{ cell.total }}/{{ cell.total }})</span>
                                                 {% else %}
-                                                    <span class="badge bg-secondary text-dark bg-opacity-10">⏳ Ожидание</span>
+                                                    <!-- Показываем прогресс (например, 1/2) -->
+                                                    <span class="badge bg-warning text-dark">
+                                                        ⏳ В Ожидании ({{ cell.completed }}/{{ cell.total }})
+                                                    </span>
                                                 {% endif %}
                                             </div>
 
                                             <!-- КНОПКА ЗАМЕНЫ (Только если не сдано) -->
-                                            {% if not cell.inspection.is_completed %}
+                                            {% if not cell.is_fully_completed and cell.date >= today %}
                                                 <button class="btn btn-outline-secondary btn-swap"
                                                         title="Поменяться сменами"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#exchangeModal"
-
-                                                        data-schedule-id="{{ cell.id }}"
+                                                        data-inspector-id="{{ cell.inspector.id }}"
                                                         data-name="{{ cell.inspector.get_full_name }}"
                                                         data-human-date="{{ cell.date|date:'d.m.Y' }}"
                                                         data-iso-date="{{ cell.date|date:'Y-m-d' }}"
@@ -222,7 +232,8 @@
                 <div class="modal-body">
 
                     <!-- Скрытое поле: ID смены, КОТОРУЮ меняем -->
-                    <input type="hidden" name="current_schedule_id" id="exchCurrentId">
+                    <input type="hidden" name="source_date" id="exchSourceDate">
+                    <input type="hidden" name="source_inspector_id" id="exchSourceInspectorId">
 
                     <!-- Инфо-блок: Кто меняется -->
                     <div class="alert alert-light border text-center mb-3">
@@ -288,20 +299,21 @@
     // 2. Логика для обмена (новая)
     async function openExchangeModal(button) {
         // 1. Достаем данные из кнопки
-        const scheduleId = button.getAttribute('data-schedule-id');
+        const inspectorId = button.getAttribute('data-inspector-id'); // Изменили
         const name = button.getAttribute('data-name');
         const humanDate = button.getAttribute('data-human-date');
         const isoDate = button.getAttribute('data-iso-date'); // YYYY-MM-DD
 
         // --- ПРОВЕРКА ОТЛАДКИ ---
         console.log("Дата для API:", isoDate);
-        if (!isoDate) {
-            alert("Ошибка: Неверный формат даты в кнопке");
-            return;
+        if (!isoDate || !inspectorId) {
+            alert("Ошибка данных в кнопке"); return;
         }
 
         // 2. Заполняем статику в модалке
-        document.getElementById('exchCurrentId').value = scheduleId;
+        // document.getElementById('exchCurrentId').value = scheduleId;
+        document.getElementById('exchSourceDate').value = isoDate;
+        document.getElementById('exchSourceInspectorId').value = inspectorId;
         document.getElementById('exchOldName').textContent = name;
         document.getElementById('exchDate').textContent = humanDate;
 

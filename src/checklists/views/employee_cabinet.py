@@ -1,10 +1,13 @@
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.contrib import messages
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
 
+from checklists.context_processors import BOSS_ROLES
 from checklists.models import (
     ChecklistTemplate,
     Inspection,
@@ -12,8 +15,15 @@ from checklists.models import (
     Schedule,
 )
 from checklists.decorators import employee_required
-from checklists.services import create_inspection_from_template, perform_auto_swap
+from checklists.services import (
+    create_inspection_from_template,
+    perform_auto_swap,
+    apply_inspection_filters_and_paginate,
+    is_global_viewer,
+)
 from checklists.tasks import notify_user_about_swap, notify_admin_about_swap
+
+User = get_user_model()
 
 
 # --- ЗОНА СОТРУДНИКА (Строгий режим) ---
@@ -22,44 +32,58 @@ def employee_dashboard(request):
     user = request.user
     today = timezone.now().date()
 
-    # 1. Вычисляем конец текущей недели (Воскресенье)
-    # weekday(): 0=Пн ... 6=Вс.
-    # Дней до воскресенья = 6 - номер_дня_недели
+    # Праздники (если используешь)
+    # by_holidays = holidays.BY()
+    # holiday_name = by_holidays.get(today)
+
+    # 1. Вычисляем конец недели
     days_until_sunday = 6 - today.weekday()
     end_of_week = today + timedelta(days=days_until_sunday)
 
-    # 2. Ищем задание в диапазоне [Сегодня ... Воскресенье]
-    # Мы не смотрим "Вчера", так как это уже просрочено (другая логика),
-    # и не смотрим "Следующую неделю" (как ты и просил).
-
-    current_task = (
+    # 2. Ищем ВСЕ задания на этой неделе
+    # Убираем .first(), берем весь список .all() (или просто без метода, т.к. это QuerySet)
+    week_schedule = (
         Schedule.objects.filter(inspector=user, date__range=[today, end_of_week])
         .select_related("template", "inspection")
         .order_by("date")
-        .first()
     )
 
-    # 3. Дополнительные данные для шаблона
-    is_today = False
+    # 3. Разделяем логику: "Сегодня" vs "Будущее"
+
+    # Список задач СТРОГО на сегодня
+    today_tasks = [t for t in week_schedule if t.date == today]
+
+    # ПРОВЕРКА ДЛЯ КНОПКИ АВТОЗАМЕНЫ
+    # Можно ли сегодня меняться? (Только если ни один отчет еще не начат)
+    can_swap_today = False
+    if today_tasks:
+        can_swap_today = not any(t.inspection for t in today_tasks)
+
+    # Ближайшая будущая задача (для отображения "Ждите до четверга")
+    # Берем первую задачу, дата которой больше сегодня
+    future_task = None
     days_until = 0
 
-    if current_task:
-        if current_task.date == today:
-            is_today = True
-        else:
-            is_today = False
-            days_until = (current_task.date - today).days
+    if not today_tasks:
+        # Если сегодня пусто, ищем, когда следующая смена
+        for t in week_schedule:
+            if t.date > today:
+                future_task = t
+                days_until = (t.date - today).days
+                break  # Нашли ближайшую, выходим
 
-    # 4. История (остается без изменений)
+    # 4. История
     my_inspections = Inspection.objects.filter(inspector=user).order_by("-created_at")[
         :5
     ]
 
     context = {
-        "task": current_task,  # Само задание
-        "is_today": is_today,  # Флаг: сегодня или нет
-        "days_until": days_until,  # Сколько дней ждать
+        "today_tasks": today_tasks,  # СПИСОК (может быть пустым)
+        "can_swap_today": can_swap_today,
+        "future_task": future_task,  # ОДИН объект (или None)
+        "days_until": days_until,
         "my_inspections": my_inspections,
+        # "holiday_name": holiday_name,
     }
     return render(request, "checklists/employee_dashboard.html", context)
 
@@ -254,14 +278,103 @@ def auto_swap_shift(request, schedule_id):
         messages.error(request, "Вы обязаны указать причину отказа!")
         return redirect("employee_dashboard")
 
+    # Сохраняем дату для уведомлений ДО того, как объект изменится
+    current_date_str = schedule_item.date.strftime("%Y-%m-%d")
+
     # Вызываем сервис
     success, message, info_about_change = perform_auto_swap(schedule_item, reason)
 
     if success:
         messages.success(request, message)
-        notify_user_about_swap.delay(schedule_item.id)
+
+        # Нам нужно узнать ID жертвы (мы можем получить его из БД,
+        # так как текущая карточка теперь принадлежит ему)
+        schedule_item.refresh_from_db()  # Подтягиваем новые данные
+        target_user_id = schedule_item.inspector.id
+
+        # Шлем письмо жертве ("Выходи сегодня!")
+        notify_user_about_swap.delay(current_date_str, target_user_id)
         notify_admin_about_swap.delay(info_about_change)
+
     else:
         messages.error(request, message)
 
     return redirect("employee_dashboard")
+
+
+@employee_required
+def management_reports_list(request):
+    user = request.user
+
+    # Если не босс — выгоняем
+    if user.role not in BOSS_ROLES and not user.is_staff:
+        messages.error(request, "Доступ запрещен.")
+        return redirect("employee_dashboard")
+
+    # --- 1. БАЗОВЫЙ ЗАПРОС (ACCESS CONTROL) ---
+    queryset = (
+        Inspection.objects.filter(is_completed=True)
+        .select_related("inspector", "template", "template__location")
+        .annotate(violation_count=Count("items", filter=Q(items__is_compliant=False)))
+        .order_by("-date_check")
+    )
+
+    # --- ЛОГИКА ДОСТУПА ---
+    if not is_global_viewer(user):
+        # Если НЕ глобальный - фильтруем только ЕГО участки
+        queryset = queryset.filter(
+            Q(template__location__manager=user)
+            | Q(template__location__deputies=user)
+            | Q(template__location__senior_masters=user)
+            | Q(template__location__masters=user)
+        ).distinct()
+
+    # 2. Вызываем наш сервис фильтрации
+    context = apply_inspection_filters_and_paginate(request, queryset)
+
+    return render(request, "checklists/management_history.html", context)
+
+
+@employee_required
+def management_inspection_detail(request, inspection_id):
+    user = request.user
+
+    # Проверка базовых прав
+    if user.role not in BOSS_ROLES and not user.is_staff:
+        messages.error(request, "Доступ запрещен.")
+        return redirect("employee_dashboard")
+
+    # Ищем отчет
+    inspection = get_object_or_404(Inspection, id=inspection_id)
+
+    # --- ЛОГИКА ДОСТУПА ---
+    # Если это НЕ глобальный зритель (не Нач.Пр., не Гл.Инж., не босс ЭМО)
+    if not is_global_viewer(user):
+        loc = inspection.template.location
+
+        # Проверяем, есть ли user в одном из списков начальников ЭТОГО location
+        is_local_boss = (
+            loc.manager == user
+            or loc.deputies.filter(id=user.id).exists()
+            or loc.senior_masters.filter(id=user.id).exists()
+            or loc.masters.filter(id=user.id).exists()
+        )
+
+        if not is_local_boss:
+            messages.error(request, "У вас нет прав на просмотр отчетов этого участка.")
+            return redirect("management_reports")
+
+    # --- ФОРМИРОВАНИЕ ДАННЫХ ДЛЯ ОТОБРАЖЕНИЯ ---
+    items = inspection.items.prefetch_related("photos").order_by(
+        "section_name", "criteria_order"
+    )
+    sections_data = {}
+    for item in items:
+        sec_name = item.section_name
+        if sec_name not in sections_data:
+            sections_data[sec_name] = []
+        sections_data[sec_name].append(item)
+
+    context = {"inspection": inspection, "sections_data": sections_data}
+
+    return render(request, "checklists/management_readonly.html", context)

@@ -100,17 +100,16 @@ def send_email(to: str, subject: str, body: str):
 
 
 @shared_task
-def notify_user_about_swap(schedule_id):
+def notify_user_about_swap(date_str, user_id):
     """
     Задача: Уведомить сотрудника, что на него перекинули смену.
     """
-    data = get_swap_notification_data(schedule_id)
+    data = get_swap_notification_data(date_str, user_id)
 
     if data:
         # Отправляем письмо
         send_email.delay(to=data["email"], subject=data["subject"], body=data["body"])
-
-        print(f"📧 [SWAP NOTIFICATION] Sent to {data['email']}\n{data['body']}")
+        print(f"📧 [SWAP NOTIFICATION] Sent to {data['email']}")
         return f"Sent swap email to {data['email']}"
 
     return "No email sent (invalid data or no email)"
