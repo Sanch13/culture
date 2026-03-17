@@ -143,12 +143,21 @@ def inspection_form_view(request, inspection_id):
 
     # --- ЛОГИКА ОТОБРАЖЕНИЯ (GET) ---
 
-    # Нам нужно сгруппировать пункты по секциям, чтобы красиво вывести в HTML.
-    # Django шаблоны не умеют хорошо группировать сами, поэтому поможем им.
-
     # 1. Получаем все пункты, отсортированные по порядку
-    items = inspection.items.select_related("criteria_origin").order_by(
-        "section_name", "criteria_order"
+    items = list(inspection.items.select_related("criteria_origin__section").all())
+
+    # 2. Сортируем средствами Python
+    # Ключ сортировки:
+    # 1. criteria_origin.section.order (Порядок оригинального раздела: 0, 1, 2...)
+    # 2. criteria_order (Порядок вопроса внутри раздела)
+    # Если оригинал удален (criteria_origin is None), кидаем его в самый конец (9999)
+    items.sort(
+        key=lambda i: (
+            i.criteria_origin.section.order
+            if i.criteria_origin and i.criteria_origin.section
+            else 9999,
+            i.criteria_order,
+        )
     )
 
     # 2. --- ПОИСК ИСТОРИИ (НОВОЕ) ---

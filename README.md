@@ -1,5 +1,6 @@
 В settings.py (или prod.py) указан STATIC_ROOT = BASE_DIR / 'static'.
 
+LOCAL
 ```shell
 docker compose -f docker-compose.local.yml exec web python manage.py collectstatic
 docker compose -f docker-compose.local.yml exec web python manage.py makemigrations
@@ -7,6 +8,16 @@ docker compose -f docker-compose.local.yml exec web python manage.py migrate
 docker compose -f docker-compose.local.yml exec web python manage.py createsuperuser
 docker compose -f docker-compose.local.yml exec web python manage.py shell
 ```
+
+SERVER
+```shell
+docker compose -f docker-compose.prod.yaml exec web python manage.py collectstatic
+docker compose -f docker-compose.prod.yaml exec web python manage.py makemigrations
+docker compose -f docker-compose.prod.yaml exec web python manage.py migrate
+docker compose -f docker-compose.prod.yaml exec web python manage.py createsuperuser
+docker compose -f docker-compose.prod.yaml exec web python manage.py shell
+```
+
 
 ```shell
 # create app
@@ -22,10 +33,20 @@ cd src
 ```
 
 
-# сделать дамп данных
+# сделать дамп данных LOCAL
 ```shell
-docker compose -f docker-compose.local.yml exec web python manage.py dumpdata users checklists --indent 4 --output fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json
+docker compose -f docker-compose.local.yml exec web python manage.py dumpdata users checklists --indent 4 --output fixtures/init_data_$(date +'%Y-%m-%d_%H:%M:%S').json
 ```
+
+# сделать дамп данных SERVER
+```shell
+docker compose -f docker-compose.prod.yaml exec web python manage.py dumpdata users checklists --indent 4 --output fixtures/init_data_$(date +'%Y-%m-%d_%H:%M:%S').json
+```
+# Перенаправить вывод на хост SERVER
+```shell
+docker compose -f docker-compose.prod.yaml exec web python manage.py dumpdata users checklists --indent 4 > ./init_data_$(date +'%Y-%m-%d_%H:%M:%S').json
+```
+
 # копирование фикстуры
 ```shell
 docker cp ./"all_checklists_data_2026-02-05_14:38:58.json" web-culture:/app/
@@ -33,7 +54,7 @@ docker cp ./"all_checklists_data_2026-02-05_14:38:58.json" web-culture:/app/
 
 # загрузка данных в БД
 ```shell
-docker compose -f docker-compose.prod.yml exec web python manage.py loaddata ./fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json
+docker compose -f docker-compose.prod.yaml exec web python manage.py loaddata ./fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json
 ```
 
 

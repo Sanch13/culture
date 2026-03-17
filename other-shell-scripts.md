@@ -35,10 +35,8 @@ count = 0
 for i in range(1, 51): # Создаем 50 человек
     fn = random.choice(first_names)
     ln = random.choice(last_names)
-
     # Добавляем цифру i, чтобы email точно был уникальным (ivanov.ivan5@...)
     email = f"{translit(ln)}.{translit(fn)}{i}@example.com"
-
     if not User.objects.filter(email=email).exists():
         User.objects.create_user(
             email=email,
