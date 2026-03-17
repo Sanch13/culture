@@ -3,12 +3,20 @@ from django.db import models
 from django.core.validators import RegexValidator
 
 from users.managers import CustomUserManager
+from users.validators import cyrillic_regex
 
 
 class User(AbstractUser):
     username = None
-    first_name = models.CharField(verbose_name="Имя", max_length=100, blank=False)
-    last_name = models.CharField(verbose_name="Фамилия", max_length=100, blank=False)
+    first_name = models.CharField(
+        verbose_name="Имя", max_length=100, blank=False, validators=[cyrillic_regex]
+    )
+    last_name = models.CharField(
+        verbose_name="Фамилия", max_length=100, blank=False, validators=[cyrillic_regex]
+    )
+    middle_name = models.CharField(
+        verbose_name="Отчество", max_length=100, blank=True, validators=[cyrillic_regex]
+    )
     email = models.EmailField("Email", unique=True)
 
     # --- ОБНОВЛЯЕМ ПОЛЕ ТЕЛЕФОН ---
@@ -66,8 +74,29 @@ class User(AbstractUser):
         verbose_name = "Сотрудник"
         verbose_name_plural = "Сотрудники"
 
+    def get_full_name(self):
+        """
+        Переопределяем стандартный метод Django.
+        Теперь он возвращает Фамилия Имя Отчество (если есть).
+        """
+        parts = [self.last_name, self.first_name]
+        if self.middle_name:
+            parts.append(self.middle_name)
+        return " ".join(parts).strip()
+
+    def get_short_name(self):
+        """
+        Возвращает Инициалы (Иванов И. И.)
+        """
+        name = f"{self.last_name}"
+        if self.first_name:
+            name += f" {self.first_name[0]}."
+        if self.middle_name:
+            name += f"{self.middle_name[0]}."
+        return name
+
     def __str__(self):
-        return f"{self.first_name} {self.last_name} <{self.email}>"
+        return f"{self.get_full_name()} <{self.email}>"
 
 
 class UserAbsence(models.Model):

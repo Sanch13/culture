@@ -305,27 +305,40 @@
 </div>
 
 <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ -->
-<div class="modal fade" id="completeModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="completeModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">Подтверждение отправки</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <!-- Добавляем ID крестику, чтобы заблокировать его при отправке -->
+                <button type="button" class="btn-close btn-close-white" id="completeModalCloseBtn" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body text-center p-4">
-                <div class="display-1 text-success mb-3">
-                    <i class="bi bi-check-circle"></i>
-                </div>
-                <h4 class="mb-3">Завершить проверку?</h4>
-                <p class="text-muted">
-                    Вы уверены, что хотите отправить отчет? <br>
-                    После этого <strong>изменения будут недоступны</strong>.
-                </p>
-            </div>
-            <div class="modal-footer justify-content-center">
-                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Назад</button>
 
-                <!-- Эта кнопка вызывает JS функцию отправки -->
+            <div class="modal-body text-center p-4">
+                <!-- ОБЫЧНЫЙ КОНТЕНТ (Показывается ДО нажатия) -->
+                <div id="completeModalContent">
+                    <div class="display-1 text-success mb-3">
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                    <h4 class="mb-3">Завершить проверку?</h4>
+                    <p class="text-muted">
+                        Вы уверены, что хотите отправить отчет? <br>
+                        После этого <strong>изменения будут недоступны</strong>.
+                    </p>
+                </div>
+
+                <!-- СПИННЕР ЗАГРУЗКИ (Скрыт по умолчанию) -->
+                <div id="completeModalLoading" style="display: none;">
+                    <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                    <h4 class="mt-3 text-success">Отправка отчета...</h4>
+                    <p class="text-muted small">Пожалуйста, подождите, не закрывайте страницу.</p>
+                </div>
+            </div>
+
+            <div class="modal-footer justify-content-center" id="completeModalFooter">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Назад</button>
                 <button type="button" class="btn btn-success px-4 fw-bold" onclick="submitFormComplete()">
                     Да, отправить
                 </button>
@@ -689,12 +702,23 @@
     }
 
     function submitFormComplete() {
+        // 1. Блокируем интерфейс модалки (чтобы не нажали дважды)
+        document.getElementById('completeModalContent').style.display = 'none'; // Прячем текст с галочкой
+        document.getElementById('completeModalFooter').style.display = 'none'; // Прячем кнопки
+        document.getElementById('completeModalCloseBtn').style.display = 'none'; // Прячем крестик
+
+        // 2. Показываем спиннер
+        document.getElementById('completeModalLoading').style.display = 'block';
+
+        // 3. Отправляем форму на сервер
         const form = document.getElementById('inspectionForm');
         const hiddenInput = document.createElement('input');
         hiddenInput.type = 'hidden';
         hiddenInput.name = 'action';
         hiddenInput.value = 'complete';
         form.appendChild(hiddenInput);
+
+        // Форма отправится, и страница перезагрузится сама (через редирект Django)
         form.submit();
     }
 </script>
