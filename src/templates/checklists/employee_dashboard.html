@@ -9,7 +9,7 @@
 
     {% if today_tasks %}
         <!-- СЦЕНАРИЙ: СЕГОДНЯ ЕСТЬ РАБОТА -->
-        <h4 class="mb-3 text-secondary">📅 Ваши задания на сегодня ({{ today_tasks|length }} шт.)</h4>
+        <h4 class="mb-3 text-secondary">Задания на сегодня ({{ today_tasks|length }} шт.)</h4>
 
         <!-- СЕТКА КАРТОЧЕК -->
         <div class="row row-cols-1 {% if today_tasks|length > 1 %}row-cols-md-2{% endif %} g-4 mb-4">
@@ -19,7 +19,7 @@
                         <div class="card-body text-center p-4 d-flex flex-column flex-grow-1">
 
                             <h2 class="text-primary mb-2">{{ task.template.name }}</h2>
-                            <p class="text-muted flex-grow-1">📍 {{ task.template.location.name }}</p>
+                            <p class="text-muted flex-grow-1">{{ task.template.location.name }}</p>
                             <hr>
 
                             <!-- КНОПКА ДЕЙСТВИЯ (ТОЛЬКО СИНЯЯ/ЖЕЛТАЯ/ЗЕЛЕНАЯ) -->
@@ -29,7 +29,7 @@
                                         <button class="btn btn-success btn-lg w-100" disabled>✅ Выполнено</button>
                                     {% else %}
                                         <a href="{% url 'inspection_form' task.inspection.id %}" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm">
-                                            ✏️ Продолжить
+                                            Продолжить
                                         </a>
                                     {% endif %}
                                 {% else %}
@@ -37,7 +37,7 @@
                                     <form action="{% url 'start_inspection' task.template.id %}" method="post" class="w-100">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">
-                                            🚀 Начать проверку
+                                            Начать проверку
                                         </button>
                                     </form>
                                 {% endif %}
@@ -55,7 +55,7 @@
             <div class="w-100 mb-5">
                 <button type="button" class="btn btn-outline-danger btn-lg w-100 fw-bold shadow-sm"
                         data-bs-toggle="modal" data-bs-target="#swapModal">
-                    🔄 Не могу выполнить проверку (Автозамена)
+                    Не могу выполнить проверку (Автозамена)
                 </button>
             </div>
 
@@ -64,7 +64,7 @@
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header bg-danger text-white">
-                            <h5 class="modal-title">Отказ от смены</h5>
+                            <h5 class="modal-title">Не могу провести аудит</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
 
@@ -82,7 +82,7 @@
                                 {% endif %}
 
                                 <label class="form-label fw-bold">Причина замены (Обязательно):</label>
-                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Больничный, отгул..."></textarea>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Больничный, отпуск, командировка..."></textarea>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -101,26 +101,92 @@
         {% endif %}
 
 
-    {% elif future_task %}
-        <!-- СЦЕНАРИЙ: БУДУЩЕЕ -->
-        <div class="alert alert-primary text-center p-5 border shadow-sm mb-5">
-            <h1 class="text-primary display-4">⏳</h1>
-            <h3>Сегодня заданий нет</h3>
-            <p class="lead">Ближайшая проверка: <strong>{{ future_task.date|date:"l, d E" }}</strong></p>
-            <p class="text-muted">(Через {{ days_until }} дн.)</p>
+    {% elif future_tasks %}
+        <!-- СЦЕНАРИЙ: БУДУЩЕЕ (Сегодня пусто, но на этой неделе есть проверка) -->
+        <div class="alert text-center p-5 border shadow-sm mb-5 bg-white"> <!-- Заменил alert-primary на bg-white для чистоты -->
+
+            <h3 class="text-primary mb-4">Сегодня заданий нет</h3>
+
+            <div class="mb-4">
+                <p class="text-muted mb-1">Ближайшая смена:</p>
+                <p class="fs-4 fw-bold text-dark mb-0">{{ future_tasks.0.date|date:"l, d E" }}</p> <!-- Берем дату из первого элемента -->
+                <p class="text-muted small">(Через {{ days_until }} дн.)</p>
+            </div>
+
+            <!-- СПИСОК ПРЕДСТОЯЩИХ ПРОВЕРОК -->
+            <div class="text-start mx-auto mb-4" style="max-width: 400px;">
+                <p class="text-muted small text-uppercase fw-bold mb-2">Вам назначены проверки:</p>
+                <ul class="list-group shadow-sm">
+                    {% for task in future_tasks %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                            <div>
+                                <strong>{{ task.template.name }}</strong><br>
+                                <small class="text-muted">{{ task.template.location.name }}</small>
+                            </div>
+                            <i class="text-muted"></i>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <hr class="my-4" style="max-width: 400px; margin: 0 auto;">
+
+            <!-- КНОПКА АВТОЗАМЕНЫ ДЛЯ БУДУЩЕЙ ПРОВЕРКИ -->
+            <div class="w-100 mt-4 mx-auto" style="max-width: 400px;">
+                <button type="button" class="btn btn-outline-danger btn-lg w-100 fw-bold shadow-sm"
+                        data-bs-toggle="modal" data-bs-target="#swapFutureModal">
+                    Не смогу выполнить (Автозамена)
+                </button>
+            </div>
+
+            <!-- МОДАЛКА ДЛЯ БУДУЩЕЙ ПРОВЕРКИ -->
+            <div class="modal fade" id="swapFutureModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title">Не могу провести аудит</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <!-- Передаем ID будущей задачи (future_tasks.0.id) -->
+                        <form action="{% url 'auto_swap_shift' future_tasks.0.id %}" method="post">
+                            {% csrf_token %}
+                            <div class="modal-body text-start text-dark">
+                                {% if future_tasks|length > 1 %}
+                                    <div class="alert alert-warning small">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        Вы отказываетесь от <strong>ВСЕХ ({{ future_tasks|length }})</strong> проверок, назначенных на {{ future_tasks.0.date|date:"d.m" }}.
+                                    </div>
+                                {% else %}
+                                    <p>Вы собираетесь перенести проверку, назначенную на <strong>{{ future_tasks.0.date|date:"l, d.m.Y" }}</strong>.</p>
+                                {% endif %}
+
+                                <label class="form-label fw-bold">Причина замены (Обязательно):</label>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Больничный, отпуск, командировка..."></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="submit" class="btn btn-danger">Подтвердить замену</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
         </div>
+        <!-- ДОБАВЛЯЕМ ELSE ДЛЯ ПУСТОЙ НЕДЕЛИ -->
     {% else %}
-        <!-- СЦЕНАРИЙ: ПУСТО -->
         <div class="alert alert-light text-center p-5 border shadow-sm mb-5 mt-4">
             <h1 class="text-muted display-4">☕️</h1>
             <h3>На этой неделе проверок нет</h3>
+            <p class="text-muted">Расписание на следующую неделю будет сформировано позже.</p>
         </div>
     {% endif %}
 
     <!-- ====================================================== -->
     <!-- БЛОК 2: ИСТОРИЯ -->
     <!-- ====================================================== -->
-    <h4 class="mb-3 text-secondary">📂 Мои последние отчеты</h4>
+    <h4 class="mb-3 text-secondary">Мои последние отчеты</h4>
     <div class="card shadow-sm border-0 mb-5">
         <div class="list-group list-group-flush">
             {% for inspection in my_inspections %}

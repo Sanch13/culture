@@ -61,16 +61,21 @@ def employee_dashboard(request):
 
     # Ближайшая будущая задача (для отображения "Ждите до четверга")
     # Берем первую задачу, дата которой больше сегодня
-    future_task = None
+    future_tasks = []
     days_until = 0
 
     if not today_tasks:
-        # Если сегодня пусто, ищем, когда следующая смена
+        # Ищем первую дату в будущем, на которую есть задачи
+        first_future_date = None
         for t in week_schedule:
             if t.date > today:
-                future_task = t
+                first_future_date = t.date
                 days_until = (t.date - today).days
-                break  # Нашли ближайшую, выходим
+                break
+
+        # Если нашли дату - собираем ВСЕ задачи на эту дату
+        if first_future_date:
+            future_tasks = [t for t in week_schedule if t.date == first_future_date]
 
     # 4. История
     my_inspections = Inspection.objects.filter(inspector=user).order_by("-created_at")[
@@ -80,7 +85,7 @@ def employee_dashboard(request):
     context = {
         "today_tasks": today_tasks,  # СПИСОК (может быть пустым)
         "can_swap_today": can_swap_today,
-        "future_task": future_task,  # ОДИН объект (или None)
+        "future_tasks": future_tasks,
         "days_until": days_until,
         "my_inspections": my_inspections,
         # "holiday_name": holiday_name,
