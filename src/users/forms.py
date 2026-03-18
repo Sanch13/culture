@@ -106,7 +106,7 @@ class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User
         # Разрешаем менять только эти поля
-        fields = ["first_name", "last_name", "phone"]
+        fields = ["first_name", "last_name", "middle_name", "phone"]
 
         widgets = {
             "first_name": forms.TextInput(
@@ -115,6 +115,9 @@ class UserProfileForm(forms.ModelForm):
             "last_name": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Ваша фамилия"}
             ),
+            "middle_name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Ваше отчество"}
+            ),
             "phone": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Например: 375291234567"}
             ),
@@ -122,6 +125,7 @@ class UserProfileForm(forms.ModelForm):
         labels = {
             "first_name": "Имя",
             "last_name": "Фамилия",
+            "middle_name": "Отчество",
             "phone": "Мобильный телефон",
         }
 

@@ -10,6 +10,7 @@ class CustomUserAdmin(UserAdmin):
         "email",
         "first_name",
         "last_name",
+        "middle_name",
         "role",
         "phone",
         "is_staff",
@@ -23,7 +24,10 @@ class CustomUserAdmin(UserAdmin):
     ordering = ("email",)
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Личные данные", {"fields": ("first_name", "last_name", "phone", "role")}),
+        (
+            "Личные данные",
+            {"fields": ("first_name", "last_name", "middle_name", "phone", "role")},
+        ),
         # --- НОВАЯ СЕКЦИЯ ---
         (
             "Квалификация",
@@ -45,6 +49,7 @@ class CustomUserAdmin(UserAdmin):
                     "password",
                     "first_name",
                     "last_name",
+                    "middle_name",
                     "role",
                     "can_perform_inspections",
                 ),
