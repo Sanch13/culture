@@ -195,7 +195,7 @@
                     <div>
                         <div class="fw-bold text-dark">{{ inspection.template.name }}</div>
                         <div class="small text-muted">
-                            📅 {{ inspection.date_check|date:"d.m.Y" }} | 📍 {{ inspection.location_snapshot }}
+                            {{ inspection.date_check|date:"d.m.Y" }} | {{ inspection.location_snapshot }}
                         </div>
                     </div>
                     {% if inspection.is_completed %}
