@@ -1,4 +1,6 @@
 import datetime
+from itertools import groupby
+
 import holidays
 
 from django.db import transaction
@@ -390,6 +392,7 @@ def prepare_daily_notifications(target_date=None):
         target_date = datetime.date.today()
 
     # 1. ЗАГРУЖАЕМ РАСПИСАНИЕ
+    # ОБЯЗАТЕЛЬНО добавляем order_by('inspector_id') для правильной работы groupby!
     schedules = (
         Schedule.objects.filter(date=target_date)
         .select_related(
@@ -400,24 +403,49 @@ def prepare_daily_notifications(target_date=None):
         )
         .prefetch_related(
             "template__location__masters",
-            "template__location__deputies",  # <--- ДОБАВИЛИ СЮДА
-            "template__location__senior_masters",  # <--- ДОБАВИЛИ СЮДА
+            "template__location__deputies",
+            "template__location__senior_masters",
         )
+        .order_by("inspector_id")
     )
 
     notifications_data = []
-    for item in schedules:
-        if not item.inspector.email:
+
+    # 2. ГРУППИРУЕМ ЗАДАЧИ ПО ИНСПЕКТОРУ
+    # groupby собирает все задачи одного инспектора вместе
+    for inspector, items_iter in groupby(schedules, key=lambda s: s.inspector):
+        if not inspector.email:
             continue
+
+        # Превращаем итератор в полноценный список
+        # Например: user_tasks = [Задача 1 (Раздув), Задача 2 (ЦПМ)]
+        user_tasks = list(items_iter)
 
         intro = "Напоминаем, что у вас запланирована плановая проверка."
 
-        body = build_composite_email_body(item, intro)
+        body = build_composite_email_body(user_tasks, intro)
+
+        # Берем первый шаблон из списка задач сотрудника
+        first_template = user_tasks[0].template
+
+        # Ищем маршрут, к которому привязан этот шаблон
+        # (Используем .first(), так как мы предполагаем, что шаблон входит в 1 маршрут)
+        route = first_template.routes.first()
+
+        if route:
+            # Если маршрут найден - пишем его имя
+            route_name = route.title
+        else:
+            # Если маршрута почему-то нет (например, шаблон назначен вручную без маршрута)
+            # - пишем просто "Несколько участков" или название первого участка
+            route_name = first_template.location.name
+
+        subject = f"Напоминание о проверке: {route_name}"
 
         notifications_data.append(
             {
-                "recipient_email": item.inspector.email,
-                "subject": f"Напоминание о проверке: {item.template.location.name}",
+                "recipient_email": inspector.email,
+                "subject": subject,
                 "body": body,
             }
         )

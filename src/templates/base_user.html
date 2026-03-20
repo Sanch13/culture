@@ -22,7 +22,9 @@
 <nav class="navbar navbar-expand-md navbar-dark bg-primary fixed-top shadow-sm">
     <div class="container">
         <!-- Логотип -->
-        <a class="navbar-brand fw-bold" href="{% url 'employee_dashboard' %}">
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{% url 'employee_dashboard' %}">
+            <!-- Настраиваем размер логотипа прямо здесь (или выносим в класс .nav-logo) -->
+            <img src="{% static 'img/logo-green.png' %}" alt="Логотип" class="nav-logo">
             Культура производства
         </a>
 
