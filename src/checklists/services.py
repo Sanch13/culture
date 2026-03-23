@@ -16,6 +16,7 @@ from checklists.models import (
     InspectionRoute,
     SwapLog,
     Location,
+    InspectionSectionScore,
 )
 from checklists.utils import format_phone_number
 
@@ -138,12 +139,11 @@ def create_inspection_from_template(template, user, date, location_snapshot):
                 # 4. Создаем строку отчета (Snapshot)
                 InspectionItem.objects.create(
                     inspection=inspection,
-                    criteria_origin=criteria,  # Ссылка на родителя (если нужно для аналитики)
-                    # КОПИРУЕМ ДАННЫЕ (фиксируем историю)
+                    criteria_origin=criteria,
                     section_name=section.title,
+                    section_type=section.section_type,
                     criteria_text=criteria.text,
                     criteria_order=criteria.order,
-                    # Значение по умолчанию
                     is_compliant=True,
                 )
 
@@ -527,3 +527,96 @@ def is_global_viewer(user):
 
     # Иначе - это обычный локальный босс (или рабочий)
     return False
+
+
+def calculate_inspection_score(inspection):
+    """
+    Математическое ядро. Рассчитывает баллы по каждому разделу и общий балл.
+    """
+    items = inspection.items.all()
+    if not items:
+        # Пустой отчет - балла нет (оставляем None)
+        return None
+
+    # 1. Группируем пункты по Типу (A, B1, C...)
+    # ВАЖНО: Убедись, что при создании Snapshot (в генераторе) ты сохраняешь section_type в InspectionItem!
+    sections_data = {}
+    for item in items:
+        # Если вдруг section_type пустой (старые отчеты), считаем его GENERAL
+        stype = getattr(item, "section_type", "GENERAL")
+
+        if stype not in sections_data:
+            sections_data[stype] = {
+                "name": item.section_name,
+                "items": [],
+                "has_violations": False,
+                "has_repeated": False,
+            }
+
+        sections_data[stype]["items"].append(item)
+        if not item.is_compliant:
+            sections_data[stype]["has_violations"] = True
+        if item.is_repeated_violation:
+            sections_data[stype]["has_repeated"] = True
+
+    # Очищаем старые баллы (если это пересчет)
+    InspectionSectionScore.objects.filter(inspection=inspection).delete()
+
+    section_scores = {}
+
+    # 2. РАСЧЕТ БАЛЛОВ ПО РАЗДЕЛАМ (По твоим правилам)
+    for stype, data in sections_data.items():
+        score = 6.0  # Идеал
+
+        # Пока пишем упрощенную базовую логику.
+        # В следующем шаге мы научим её смотреть историю "Вчера и Позавчера".
+        if data["has_repeated"]:
+            # Если есть галочка "Повторное" -> 3 балла (или 2, если 3-й день, но пока 3)
+            score = 3.0
+
+        elif data["has_violations"]:
+            # Обычное нарушение: считаем долю правильных ответов
+            # В твоем ТЗ: "Сумма баллов / на количество".
+            # Для раздела это: (Кол-во вопросов - Кол-во нарушений) / Кол-во вопросов * 6
+            total = len(data["items"])
+            bad = sum(1 for i in data["items"] if not i.is_compliant)
+            if total > 0:
+                score = round(6.0 * ((total - bad) / total), 2)
+            else:
+                score = 0.0
+
+        # Сохраняем балл за секцию
+        InspectionSectionScore.objects.create(
+            inspection=inspection,
+            date_check=inspection.date_check,
+            section_name=data["name"],
+            section_type=stype,
+            score=score,
+        )
+        section_scores[stype] = score
+
+    # 3. ИТОГОВЫЙ БАЛЛ ЗА ОТЧЕТ
+    # В ТЗ: Исключаем B1 и D из расчета балла конкретного отчета.
+    # Они считаются "особняком" для сводной таблицы участков.
+
+    # Собираем баллы только тех разделов, которые НЕ B1 и НЕ D
+    scores_for_final = [
+        score for stype, score in section_scores.items() if stype not in ["B1", "D"]
+    ]
+
+    if scores_for_final:
+        # Усредняем только "классические" разделы (A, B2, C)
+        final_score = sum(scores_for_final) / len(scores_for_final)
+    else:
+        # Если в отчете были ТОЛЬКО B1 или D (например, отчет чисто ЭМО),
+        # то его итоговый балл будет состоять из них (чтобы не было 6.0 просто так).
+        if section_scores:
+            final_score = sum(section_scores.values()) / len(section_scores)
+        else:
+            final_score = 6.0  # Идеал, если пустой отчет
+
+    # Обновляем шапку отчета
+    inspection.final_score = round(final_score, 2)
+    inspection.save(update_fields=["final_score"])
+
+    return inspection.final_score

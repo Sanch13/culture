@@ -136,7 +136,18 @@
 - корректировка prepare_daily_notifications. передаем список user_tasks конкретного инспектора. В теме письма ставим маршрут
 - добавил логотип.
 
+# 23-03-2026
+- Добавил чек бокс повторное нарушение в отчет при заполнении
+- добавил api на сохранении чекбокса True/False
+- добавил final_score для Inspection
+- ввел типы section_type для разделов в модель ChecklistSection
+- ввел section_type, is_repeated_violation в модель InspectionItem для хранения
+- реализовал первоначальная логика подсчета в сервисе calculate_inspection_score
+- вынес запуск подсчета баллов в селери task_calculate_score
+- добавил в create_inspection_from_template  сохранение section_type=section.section_type
+-
 
+TODO:
 TODO: Сделать МИГРАЦИИ!!! Скопировать статику!!!
 
 TODO: Проверить task_generate_weekly_schedule !!

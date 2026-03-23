@@ -26,6 +26,7 @@ from checklists.views.api import (
     save_status_ajax,
     toggle_employee_permission,
     api_get_swap_candidates,
+    save_repeated_ajax,
 )
 
 __all__ = (
@@ -52,4 +53,5 @@ __all__ = (
     "save_status_ajax",
     "toggle_employee_permission",
     "api_get_swap_candidates",
+    "save_repeated_ajax",
 )

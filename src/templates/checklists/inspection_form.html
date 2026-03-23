@@ -214,6 +214,24 @@
                                 <label for="radio_bad_{{ item.id }}" class="lbl-no">✖ Нарушение</label>
 
                             </div>
+                            <!-- НОВЫЙ БЛОК: ЧЕКБОКС ПОВТОРНОГО НАРУШЕНИЯ -->
+                            <!-- Показываем его только если есть история (item.history) -->
+                            {% if item.history %}
+                            <div class="mt-2 p-2 rounded" id="repeated_block_{{ item.id }}" style="background-color: #f8d7da; border: 1px solid #f8d7da;">
+                                <div class="form-check">
+                                    <input class="form-check-input border-warning shadow-sm" type="checkbox"
+                                           name="repeated_{{ item.id }}"
+                                           id="check_repeated_{{ item.id }}"
+                                           value="true"
+                                           {% if item.is_repeated_violation %}checked{% endif %}
+                                           onchange="saveRepeatedAjax({{ item.id }}, this.checked); handleInteraction({{ item.id }});">
+                                    <label class="form-check-label small fw-bold text-danger" for="check_repeated_{{ item.id }}">
+                                        <i class="bi bi-exclamation-triangle"></i> Повторное нарушение
+                                    </label>
+                                </div>
+                            </div>
+                            {% endif %}
+                            <!-- КОНЕЦ НОВОГО БЛОКА -->
                         </div>
 
                         <!-- Блок 2: Комментарий и Фото -->
@@ -444,22 +462,24 @@
         // 1. Получаем текущие данные
         const commentField = document.getElementById(`comment_${itemId}`);
         const photoContainer = document.getElementById(`photo-container-${itemId}`);
+        const repeatedCheckbox = document.getElementById(`check_repeated_${itemId}`);
 
         const hasText = commentField.value.trim().length > 0;
         const hasPhotos = photoContainer.children.length > 0;
+        const isRepeated = repeatedCheckbox ? repeatedCheckbox.checked : false;
 
         const radioBad = document.getElementById(`radio_bad_${itemId}`);
         const radioOk = document.getElementById(`radio_ok_${itemId}`);
 
-        // 2. Логика переключения
-        if (hasText || hasPhotos) {
-            // Если есть данные -> Принудительно ставим "Нарушение"
+        // Логика переключения: Если есть текст ИЛИ фото ИЛИ галочка "Повторное"
+        if (hasText || hasPhotos || isRepeated) {
+            // Принудительно ставим "Нарушение"
             if (!radioBad.checked) {
                 radioBad.checked = true;
                 saveStatusAjax(itemId, 'false');
             }
         } else {
-            // Если данных НЕТ (пусто) -> Принудительно возвращаем "ОК"
+            // Если ВООБЩЕ ничего нет -> Принудительно возвращаем "ОК"
             if (!radioOk.checked) {
                 radioOk.checked = true;
                 saveStatusAjax(itemId, 'true');
@@ -478,33 +498,36 @@
 
         const commentField = document.getElementById(`comment_${itemId}`);
         const photoContainer = document.getElementById(`photo-container-${itemId}`);
+        const repeatedCheckbox = document.getElementById(`check_repeated_${itemId}`);
 
         // Проверяем наличие данных
         const hasText = commentField.value.trim().length > 0;
         const hasPhotos = photoContainer.children.length > 0;
-        const hasData = hasText || hasPhotos;
+        const isRepeated = repeatedCheckbox ? repeatedCheckbox.checked : false;
 
-        // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: БЛОКИРОВКА КНОПКИ "ОК" ---
+        const hasData = hasText || hasPhotos || isRepeated;
+
+        // --- БЛОКИРОВКА КНОПКИ "ОК" ---
         if (hasData) {
-            // Если есть улики -> Кнопка "ОК" умирает
             radioOk.disabled = true;
-            labelOk.classList.add('disabled-state'); // Делаем бледной
+            labelOk.classList.add('disabled-state');
 
-            // Если вдруг (каким-то чудом) стояла галочка на ОК -> переключаем на Нарушение
             if (radioOk.checked) {
                 radioBad.checked = true;
                 saveStatusAjax(itemId, 'false');
             }
         } else {
-            // Если данных нет -> Кнопка "ОК" оживает
             radioOk.disabled = false;
             labelOk.classList.remove('disabled-state');
         }
-        // --------------------------------------------------
 
-        // Настройка плейсхолдеров (как и раньше)
+        // Настройка плейсхолдеров
         if (radioBad.checked) {
-            commentField.placeholder = "Опишите нарушение (обязательно)...";
+            if (isRepeated) {
+                commentField.placeholder = "Опишите повторное нарушение (ОБЯЗАТЕЛЬНО)...";
+            } else {
+                commentField.placeholder = "Опишите нарушение (обязательно)...";
+            }
         } else {
             commentField.placeholder = "Комментарий (необязательно)...";
             commentField.classList.remove('is-invalid');
@@ -603,6 +626,25 @@
         });
     }
 
+    // === AJAX СОХРАНЕНИЕ ПОВТОРНОГО НАРУШЕНИЯ ===
+    function saveRepeatedAjax(itemId, isRepeated) {
+        const url = `/api/save-repeated/${itemId}/`;
+        const formData = new FormData();
+        formData.append('is_repeated', isRepeated); // true или false
+
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken},
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                console.log(`Повторное нарушение ${itemId} сохранено: ${isRepeated}`);
+            } else {
+                console.error('Ошибка сохранения повторного нарушения');
+            }
+        });
+    }
+
     // ============================================================
     // УДАЛЕНИЕ ФОТО
     // ============================================================
@@ -650,49 +692,82 @@
         const items = document.querySelectorAll('[id^="radio_bad_"]');
         let hasError = false;
         let firstErrorElement = null;
+        let errorMessage = "Заполните обязательные поля!"; // Дефолтное сообщение
 
         items.forEach(radioBad => {
             if (radioBad.checked) { // Если выбрано Нарушение
                 const itemId = radioBad.id.split('_')[2];
                 const commentField = document.getElementById(`comment_${itemId}`);
-                const hasText = commentField.value.trim().length > 0;
+                const photoContainer = document.getElementById(`photo-container-${itemId}`);
+                const repeatedCheckbox = document.getElementById(`check_repeated_${itemId}`);
 
-                // ПРАВИЛО: Нарушение = Обязательный комментарий
+                const hasText = commentField.value.trim().length > 0;
+                const hasPhotos = photoContainer.children.length > 0;
+                const isRepeated = repeatedCheckbox ? repeatedCheckbox.checked : false;
+
+                let localError = false;
+
+                // ПРАВИЛО 1: При любом нарушении нужен комментарий
                 if (!hasText) {
-                    commentField.classList.add('is-invalid'); // Красная рамка
-                    hasError = true;
+                    commentField.classList.add('is-invalid');
+                    localError = true;
+                    errorMessage = "Обязательно добавьте текстовое описание нарушения.";
                     if (!firstErrorElement) firstErrorElement = commentField;
                 } else {
                     commentField.classList.remove('is-invalid');
                 }
+
+                // ПРАВИЛО 2: Если ПОВТОРНОЕ, то ОБЯЗАТЕЛЬНО нужно ФОТО
+                if (isRepeated && !hasPhotos) {
+                    // Подсветим красным блок с кнопками добавления фото
+                    const photoBtnBlock = document.getElementById(`photo_btn_${itemId}`);
+                    if (photoBtnBlock) {
+                        photoBtnBlock.classList.add('border', 'border-danger', 'border-2', 'p-1', 'rounded');
+                        setTimeout(() => photoBtnBlock.classList.remove('border', 'border-danger', 'border-2', 'p-1', 'rounded'), 4000);
+                    }
+
+                    localError = true;
+                    errorMessage = "Для 'Повторного нарушения' ОБЯЗАТЕЛЬНО прикрепите фотографию.";
+
+                    // Если фокус еще не занят комментарием, ставим фокус на чекбокс повторного
+                    if (!firstErrorElement) firstErrorElement = repeatedCheckbox;
+                }
+
+                if (localError) hasError = true;
             }
         });
 
+        // 3. --- НОВАЯ ПРОВЕРКА: Логика парадокса ---
+        // Ищем все отмеченные чекбоксы "Повторное нарушение", у которых вдруг НЕ нажато "Нарушение"
+        // (Хотя наша логика handleInteraction не должна этого допустить, но для железобетонности)
+        const repeatedCheckboxes = document.querySelectorAll('[id^="check_repeated_"]:checked');
+        repeatedCheckboxes.forEach(checkbox => {
+            const itemId = checkbox.id.split('_')[2];
+            const radioBad = document.getElementById(`radio_bad_${itemId}`);
+
+            if (!radioBad.checked) {
+                hasError = true;
+                errorMessage = "Вы отметили 'Повторное нарушение', но статус пункта стоит 'ОК'. Это недопустимо.";
+                if (!firstErrorElement) firstErrorElement = checkbox;
+            }
+        });
+
+        // Вывод ошибки и скролл
         if (hasError) {
-            // --- НОВАЯ ЛОГИКА: РАЗВОРАЧИВАЕМ СВЕРНУТЫЙ БЛОК ---
-            // Ищем родительский блок с классом 'collapse' (это наша сворачиваемая секция)
             const parentCollapse = firstErrorElement.closest('.collapse');
 
-            // Проверяем, существует ли он и не развернут ли он уже (нет класса 'show')
             if (parentCollapse && !parentCollapse.classList.contains('show')) {
-                // Если свернут — принудительно разворачиваем его через Bootstrap API
                 const bsCollapse = new bootstrap.Collapse(parentCollapse, { toggle: false });
                 bsCollapse.show();
-
-                // Нам нужно подождать пару миллисекунд, пока пройдет анимация развертывания,
-                // иначе scrollIntoView сработает неправильно.
                 setTimeout(() => {
                     firstErrorElement.scrollIntoView({behavior: "smooth", block: "center"});
-                    errorModal.show();
-                }, 300); // 300 мс обычно хватает для анимации Bootstrap
+                    showErrorModal(errorMessage);
+                }, 300);
             } else {
-                // Если блок и так развернут (или его нет) — просто скроллим
                 firstErrorElement.scrollIntoView({behavior: "smooth", block: "center"});
-                errorModal.show();
+                showErrorModal(errorMessage);
             }
-            // --------------------------------------------------
 
-            // Ставим фокус в поле после закрытия окна ошибки
             document.getElementById('errorModal').addEventListener('hidden.bs.modal', function () {
                 firstErrorElement.focus();
             }, {once: true});
@@ -700,8 +775,22 @@
             return;
         }
 
-        // Если ошибок нет — показываем окно подтверждения отправки
         completeModal.show();
+    }
+
+    // Вспомогательная функция для обновления текста в модалке ошибки
+    function showErrorModal(message) {
+        const errorModalEl = document.getElementById('errorModal');
+        if (errorModalEl) {
+            const modalBodyText = errorModalEl.querySelector('.modal-body p.fw-bold');
+            if (modalBodyText) {
+                modalBodyText.textContent = message; // Подставляем конкретную причину ошибки
+            }
+            const modal = new bootstrap.Modal(errorModalEl);
+            modal.show();
+        } else {
+            alert(message);
+        }
     }
 
     function submitFormComplete() {

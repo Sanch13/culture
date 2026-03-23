@@ -7,11 +7,13 @@ from django.contrib.auth import get_user_model
 
 from celery import shared_task
 
+from checklists.models import Inspection
 from checklists.utils import send_message
 from checklists.services import (
     generate_schedule,
     prepare_daily_notifications,
     get_swap_notification_data,
+    calculate_inspection_score,
 )
 
 User = get_user_model()
@@ -127,3 +129,25 @@ def notify_admin_about_swap(message):
             send_email.delay(to=admin.email, subject="Автозамена", body=message)
 
     return f"Sent swap email to {admins}"
+
+
+@shared_task
+def task_calculate_score(inspection_id):
+    """
+    Фоновая задача для расчета баллов за отчет.
+    Запускается после успешной сдачи отчета сотрудником.
+    """
+    try:
+        # Подтягиваем отчет вместе с ответами, чтобы не делать лишних запросов внутри калькулятора
+        inspection = Inspection.objects.prefetch_related("items").get(id=inspection_id)
+
+        # Запускаем движок (передаем объект, а не ID)
+        score = calculate_inspection_score(inspection)
+
+        return f"Отчет {inspection_id} рассчитан. Итог: {score} баллов."
+
+    except Inspection.DoesNotExist:
+        return f"Ошибка: Отчет {inspection_id} не найден."
+    except Exception as e:
+        # Логируем любую непредвиденную ошибку (например, деление на ноль)
+        return f"КРИТИЧЕСКАЯ ОШИБКА при расчете отчета {inspection_id}: {str(e)}"

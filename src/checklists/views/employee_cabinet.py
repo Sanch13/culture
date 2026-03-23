@@ -21,7 +21,11 @@ from checklists.services import (
     apply_inspection_filters_and_paginate,
     is_global_viewer,
 )
-from checklists.tasks import notify_user_about_swap, notify_admin_about_swap
+from checklists.tasks import (
+    notify_user_about_swap,
+    notify_admin_about_swap,
+    task_calculate_score,
+)
 
 User = get_user_model()
 
@@ -138,6 +142,9 @@ def inspection_form_view(request, inspection_id):
             # Тут можно добавить валидацию: все ли поля заполнены?
             inspection.is_completed = True
             inspection.save()
+
+            task_calculate_score.delay(inspection.id)
+
             # messages.success(request, "Проверка успешно завершена и отправлена!")
             return redirect("employee_dashboard")
 

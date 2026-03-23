@@ -158,3 +158,25 @@ def api_get_swap_candidates(request):
         data.append({"id": value_key, "label": label})
 
     return JsonResponse({"candidates": data})
+
+
+@employee_required
+@require_POST
+def save_repeated_ajax(request, item_id):
+    """
+    Автосохранение галочки 'Повторное нарушение'.
+    """
+    item = get_object_or_404(
+        InspectionItem, id=item_id, inspection__inspector=request.user
+    )
+
+    # Получаем 'true' или 'false' из JS
+    is_repeated_str = request.POST.get("is_repeated")
+
+    if is_repeated_str == "true":
+        item.is_repeated_violation = True
+    elif is_repeated_str == "false":
+        item.is_repeated_violation = False
+
+    item.save()
+    return JsonResponse({"status": "ok"})

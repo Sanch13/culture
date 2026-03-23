@@ -77,4 +77,9 @@ urlpatterns = [
         views.api_get_swap_candidates,
         name="api_get_swap_candidates",
     ),
+    path(
+        "api/save-repeated/<int:item_id>/",
+        views.save_repeated_ajax,
+        name="save_repeated_ajax",
+    ),
 ]

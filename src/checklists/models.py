@@ -87,6 +87,29 @@ class ChecklistSection(models.Model):
     Раздел внутри шаблона (например, 'А. Рабочее пространство').
     """
 
+    TYPE_A = "A"
+    TYPE_B1 = "B1"
+    TYPE_B2 = "B2"
+    TYPE_C = "C"
+    TYPE_D = "D"
+    TYPE_GENERAL = "GENERAL"
+
+    SECTION_TYPE_CHOICES = [
+        (TYPE_A, "Раздел А (Рабочее пространство)"),
+        (TYPE_B1, "Раздел В1 (ЭМО в цехах)"),
+        (TYPE_B2, "Раздел В2 (Оборудование)"),
+        (TYPE_C, "Раздел С (Участок в целом)"),
+        (TYPE_D, "Раздел D (ЭМО)"),
+        (TYPE_GENERAL, "Общий/Другой"),
+    ]
+
+    section_type = models.CharField(
+        "Тип раздела (для расчетов)",
+        max_length=10,
+        choices=SECTION_TYPE_CHOICES,
+        default=TYPE_GENERAL,
+    )
+
     template = models.ForeignKey(
         ChecklistTemplate,
         on_delete=models.CASCADE,
@@ -179,6 +202,7 @@ class Inspection(models.Model):
 
     # Статус отчета (опционально, на будущее)
     is_completed = models.BooleanField("Проверка завершена", default=False)
+    final_score = models.FloatField("Итоговый балл", null=True, blank=True)
 
     def __str__(self):
         return f"Отчет от {self.date_check} - {self.location_snapshot}"
@@ -216,6 +240,10 @@ class InspectionItem(models.Model):
     section_name = models.CharField("Раздел (архив)", max_length=300)
     criteria_text = models.CharField("Вопрос (архив)", max_length=1000)
     criteria_order = models.PositiveIntegerField("Порядок (архив)", default=0)
+    section_type = models.CharField(
+        "Тип раздела (архив)", max_length=10, default="GENERAL"
+    )
+    is_repeated_violation = models.BooleanField("Повторное нарушение", default=False)
 
     # --- РЕЗУЛЬТАТЫ ---
     # True = 1 (Соответствует), False = 0 (Не соответствует)
@@ -235,6 +263,32 @@ class InspectionItem(models.Model):
         ordering = ["inspection", "section_name", "criteria_order"]
         verbose_name = "Результат пункта"
         verbose_name_plural = "Результаты пунктов"
+
+
+class InspectionSectionScore(models.Model):
+    """
+    Хранит вычисленный балл за конкретный РАЗДЕЛ в рамках одного отчета.
+    Нужно для детальной аналитики (например, "Динамика чистоты пола (Раздел С) за месяц").
+    """
+
+    inspection = models.ForeignKey(
+        Inspection, on_delete=models.CASCADE, related_name="section_scores"
+    )
+    date_check = models.DateField("Дата проверки", db_index=True)
+    section_name = models.CharField("Название раздела", max_length=300)
+    section_type = models.CharField(
+        "Тип раздела", max_length=10
+    )  # 'A', 'B1', 'C' и т.д.
+
+    score = models.FloatField("Балл за раздел")
+
+    def __str__(self):
+        return f"{self.section_type} ({self.score} б.)"
+
+    class Meta:
+        verbose_name = "Балл за раздел"
+        verbose_name_plural = "Баллы за разделы"
+        ordering = ["-date_check", "section_type"]
 
 
 class ViolationPhoto(models.Model):
