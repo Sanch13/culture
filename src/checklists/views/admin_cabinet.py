@@ -139,7 +139,9 @@ def admin_weekly_schedule(request):
 
     for i in range(3):
         week_start = start_of_current_week + timedelta(weeks=i)
-        week_days = [week_start + timedelta(days=d) for d in range(5)]
+        # week_days = [week_start + timedelta(days=d) for d in range(5)]
+
+        week_days = [week_start + timedelta(days=d) for d in range(7)]
 
         rows = []
         for route in routes:
