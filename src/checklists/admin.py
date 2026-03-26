@@ -11,6 +11,7 @@ from checklists.models import (
     ViolationPhoto,
     Schedule,
     InspectionRoute,
+    CalendarOverride,
 )
 
 
@@ -140,3 +141,9 @@ class ScheduleAdmin(admin.ModelAdmin):
         return "⚪️ Ожидает"
 
     status_display.short_description = "Статус"
+
+
+@admin.register(CalendarOverride)
+class CalendarOverrideAdmin(admin.ModelAdmin):
+    list_display = ("date", "day_type", "description")
+    list_filter = ("day_type", "date")

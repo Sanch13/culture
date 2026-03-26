@@ -415,3 +415,31 @@ class LocationDailyScore(models.Model):
         ordering = ["-date", "location"]
         verbose_name = "Сводный балл участка"
         verbose_name_plural = "Аналитика: Сводные баллы участков"
+
+
+class CalendarOverride(models.Model):
+    """
+    Таблица для ручной настройки переносов рабочих/выходных дней (Постановления Совмина).
+    Переопределяет стандартную логику календаря и библиотеки holidays.
+    """
+
+    date = models.DateField("Дата", unique=True, db_index=True)
+
+    TYPE_WORKDAY = "work"
+    TYPE_DAY_OFF = "off"
+
+    DAY_TYPES = [
+        (TYPE_WORKDAY, "Рабочий день"),
+        (TYPE_DAY_OFF, "Доп. выходной"),
+    ]
+
+    day_type = models.CharField("Тип дня", max_length=10, choices=DAY_TYPES)
+    description = models.CharField("Описание (для админа)", max_length=200, blank=True)
+
+    def __str__(self):
+        return f"{self.date}: {self.get_day_type_display()}"
+
+    class Meta:
+        ordering = ["-date"]
+        verbose_name = "Исключение календаря (Перенос)"
+        verbose_name_plural = "Справочник: Календарь (Переносы)"

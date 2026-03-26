@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     CELERY_ACCEPT_CONTENT: list
     CELERY_TASK_SERIALIZER: str
 
+    MAILCOW_API_URL: str
+    MAILCOW_API_KEY: str
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
         env_file_encoding="utf-8",

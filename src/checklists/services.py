@@ -18,6 +18,7 @@ from checklists.models import (
     Location,
     InspectionSectionScore,
     LocationDailyScore,
+    CalendarOverride,
 )
 from checklists.utils import format_phone_number
 
@@ -28,8 +29,6 @@ def generate_schedule(start_date, days_count=7):
     """
     Генерирует расписание на основе МАРШРУТОВ (InspectionRoute).
     """
-    by_holidays = holidays.BY()
-
     # 1. Загружаем МАРШРУТЫ (а не шаблоны)
     # Сортируем по order, чтобы порядок раздачи был фиксирован
     # prefetch_related('templates') загружает связанные шаблоны сразу, чтобы не тормозить
@@ -65,12 +64,7 @@ def generate_schedule(start_date, days_count=7):
 
     with transaction.atomic():
         for _ in range(days_count):
-            # Пропуск выходных/праздников
-            if current_date.weekday() >= 5:
-                current_date += datetime.timedelta(days=1)
-                continue
-
-            if current_date in by_holidays:
+            if not is_working_day(current_date):
                 current_date += datetime.timedelta(days=1)
                 continue
 
@@ -719,3 +713,31 @@ def calculate_daily_location_scores(target_date):
                 else None
             },
         )
+
+
+def is_working_day(target_date):
+    """
+    Возвращает True, если день рабочий. Учитывает:
+    1. Ручные переносы (CalendarOverride) - наивысший приоритет.
+    2. Праздники (holidays.BY).
+    3. Стандартные выходные (Суббота, Воскресенье).
+    """
+    # 1. Проверяем ручные переопределения (Приоритет №1)
+    override = CalendarOverride.objects.filter(date=target_date).first()
+    if override:
+        return override.day_type == CalendarOverride.TYPE_WORKDAY
+
+    # 2. Если ручных настроек нет, смотрим стандартный календарь
+
+    # А. Праздники РБ (Приоритет №2)
+    by_holidays = holidays.BY(years=target_date.year)
+    if target_date in by_holidays:
+        return False  # Праздник = не работаем
+
+    # Б. Обычные выходные (Приоритет №3)
+    # 5 = Суббота, 6 = Воскресенье
+    if target_date.weekday() >= 5:
+        return False  # Выходной = не работаем
+
+    # Если ничего не совпало - это обычный Пн-Пт
+    return True

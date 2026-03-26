@@ -27,4 +27,11 @@ app.conf.beat_schedule = {
         "task": "checklists.tasks.send_inspection_reminders",
         "schedule": crontab(hour=9, minute=0, day_of_week="mon-fri"),
     },
+    "sync-mailcow-emails": {
+        "task": "users.tasks.task_sync_corporate_emails",
+        # Запускаем каждую ночь в 02:00
+        "schedule": crontab(hour=2, minute=0),
+        # Для тестирования сейчас можешь раскомментировать эту строку:
+        # 'schedule': crontab(minute='*/5'),  # Каждые 5 минут
+    },
 }

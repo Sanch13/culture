@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 
 from checklists.tasks import send_email
 from checklists.utils import format_phone_number
+from users.services import sync_mailcow_emails
 
 User = get_user_model()
 
@@ -44,3 +45,12 @@ def notify_admins_about_registration(new_user_id):
 
     except User.DoesNotExist:
         return "Ошибка: Пользователь не найден"
+
+
+@shared_task
+def task_sync_corporate_emails():
+    """
+    Периодическая задача для синхронизации почты.
+    """
+    result = sync_mailcow_emails()
+    return result

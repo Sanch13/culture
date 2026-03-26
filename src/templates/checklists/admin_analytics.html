@@ -29,16 +29,6 @@
         left: 0;
     }
 
-    /* 2. Условное форматирование (Цвета баллов) */
-    .score-bad {
-        color: #dc3545; /* Красный текст */
-        font-weight: bold;
-    }
-    .score-good {
-        color: #198754; /* Зеленый текст */
-        font-weight: bold;
-    }
-
     /* Отступ для подчиненных строк (Отчетов) */
     .sub-row {
         padding-left: 2rem !important;
@@ -66,22 +56,17 @@
         text-align: center;
     }
 
-    /*.score-bad { color: #dc3545; font-weight: bold; }*/
-    /*.score-good { color: #198754; font-weight: bold; }*/
-    /*.sub-row { padding-left: 1.5rem !important; color: #6c757d; }*/
-
-
     .score-bad {
-        color: #dc3545; /* Красный 0-4.0 */
-        font-weight: bold;
+        color: #dc3545 !important;
+        font-weight: bold !important;
     }
     .score-warning {
-        color: #fd7e14; /* Оранжевый/Желтый 4.1-5.0 */
-        font-weight: bold;
+        color: #fd7e14 !important;
+        font-weight: bold !important;
     }
     .score-good {
-        color: #198754; /* Зеленый 5.1-6.0 */
-        font-weight: bold;
+        color: #198754 !important;
+        font-weight: bold !important;
     }
 
 </style>
@@ -123,7 +108,7 @@
                 <th class="day-col">{{ day|date:"d" }}</th>
             {% endfor %}
 
-            <th class="bg-primary bg-opacity-10" style="width: 60px;">Итог</th>
+            <th class="bg-opacity-10" style="width: 60px;">Итог</th>
         </tr>
     </thead>
     <tbody class="text-center">
@@ -154,7 +139,7 @@
             {% endfor %}
 
             <!-- Среднее за месяц -->
-            <td class="bg-primary bg-opacity-10 fw-bold
+            <td class="bg-opacity-10 fw-bold
                 {% if row.avg_month != None %}
                     {% if row.avg_month <= 4.0 %}score-bad
                     {% elif row.avg_month <= 5.0 %}score-warning

@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 
+from users.models import AllowedCorporateEmail
+
 User = get_user_model()
 
 
@@ -64,16 +66,34 @@ class CustomUserCreationForm(UserCreationForm):
         return phone
 
     def clean_email(self):
-        """Переводим email в нижний регистр при регистрации."""
+        """
+        Многоуровневая валидация Email.
+        """
         email = self.cleaned_data.get("email")
-        if email:
-            email = email.lower()
+        if not email:
+            return email
 
-            # Дополнительная проверка на уникальность (на всякий случай)
-            if User.objects.filter(email=email).exists():
-                raise forms.ValidationError(
-                    "Пользователь с таким Email уже существует."
-                )
+        email = email.lower().strip()  # Приводим к нижнему регистру и убираем пробелы
+
+        # 1. ПРОВЕРКА ДОМЕНА (Отсекаем gmail, yandex и т.д.)
+        if not email.endswith("@miran-bel.com"):
+            raise forms.ValidationError(
+                "Регистрация разрешена только для корпоративной почты @miran-bel.com"
+            )
+
+        # 2. ПРОВЕРКА НА СУЩЕСТВОВАНИЕ В СИСТЕМЕ (Уже зарегистрирован)
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError(
+                "Пользователь с таким Email уже зарегистрирован."
+            )
+
+        # 3. ПРОВЕРКА ПО БЕЛОМУ СПИСКУ (Mailcow)
+        # Если почты нет в таблице разрешенных - запрещаем регистрацию
+        if not AllowedCorporateEmail.objects.filter(email=email).exists():
+            raise forms.ValidationError(
+                "Ваш Email не найден в корпоративном справочнике. "
+                "Если вы новый сотрудник, дождитесь синхронизации баз данных или обратитесь к администратору."
+            )
 
         return email
 

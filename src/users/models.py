@@ -134,3 +134,20 @@ class UserAbsence(models.Model):
     class Meta:
         verbose_name = "Отсутствие сотрудника"
         verbose_name_plural = "График отсутствий"
+
+
+class AllowedCorporateEmail(models.Model):
+    """
+    Белый список корпоративных email-адресов.
+    Заполняется автоматически из Mailcow или вручную администратором.
+    """
+
+    email = models.EmailField("Разрешенный Email", unique=True)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.email
+
+    class Meta:
+        verbose_name = "Разрешенный Email"
+        verbose_name_plural = "Белый список Email"
