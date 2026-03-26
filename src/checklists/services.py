@@ -5,7 +5,7 @@ import holidays
 
 from django.db import transaction
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Q, Avg, Min
 from django.utils import timezone
 from django.core.paginator import Paginator
 
@@ -17,6 +17,7 @@ from checklists.models import (
     SwapLog,
     Location,
     InspectionSectionScore,
+    LocationDailyScore,
 )
 from checklists.utils import format_phone_number
 
@@ -531,61 +532,77 @@ def is_global_viewer(user):
 
 def calculate_inspection_score(inspection):
     """
-    Математическое ядро. Рассчитывает баллы по каждому разделу и общий балл.
+    ЭТАП 1: Высчитываем баллы для каждого РАЗДЕЛА (A, B1, B2, C...)
+    ЭТАП 2: Высчитываем итоговый балл ОТЧЕТА.
     """
     items = inspection.items.all()
     if not items:
-        # Пустой отчет - балла нет (оставляем None)
-        return None
+        return
 
-    # 1. Группируем пункты по Типу (A, B1, C...)
-    # ВАЖНО: Убедись, что при создании Snapshot (в генераторе) ты сохраняешь section_type в InspectionItem!
-    sections_data = {}
+    # --- 1. ОЦЕНКА РАЗДЕЛОВ ---
+
+    # Группируем вопросы по типам разделов (A, B1, C...)
+    sections_dict = {}
     for item in items:
-        # Если вдруг section_type пустой (старые отчеты), считаем его GENERAL
-        stype = getattr(item, "section_type", "GENERAL")
-
-        if stype not in sections_data:
-            sections_data[stype] = {
-                "name": item.section_name,
-                "items": [],
-                "has_violations": False,
-                "has_repeated": False,
-            }
-
-        sections_data[stype]["items"].append(item)
         if not item.is_compliant:
-            sections_data[stype]["has_violations"] = True
-        if item.is_repeated_violation:
-            sections_data[stype]["has_repeated"] = True
+            if item.is_repeated_violation:
+                yesterday_item = (
+                    InspectionItem.objects.filter(
+                        inspection__template=inspection.template,
+                        inspection__is_completed=True,
+                        inspection__date_check__lt=inspection.date_check,
+                        criteria_origin_id=item.criteria_origin_id,
+                    )
+                    .order_by("-inspection__date_check")
+                    .first()
+                )
 
-    # Очищаем старые баллы (если это пересчет)
+                item.consecutive_violations = (
+                    (yesterday_item.consecutive_violations + 1) if yesterday_item else 2
+                )
+            else:
+                item.consecutive_violations = 1
+        else:
+            item.consecutive_violations = 0
+
+        item.save(update_fields=["consecutive_violations"])
+
+        stype = getattr(item, "section_type", "GENERAL")
+        if not stype:
+            stype = "GENERAL"
+
+        if stype not in sections_dict:
+            sections_dict[stype] = {"name": item.section_name, "items": []}
+
+        sections_dict[stype]["items"].append(item)
+
     InspectionSectionScore.objects.filter(inspection=inspection).delete()
 
-    section_scores = {}
+    # Словарь для хранения посчитанных баллов: {'A': 5.0, 'B1': 3.0, 'C': 6.0}
+    calculated_section_scores = {}
 
-    # 2. РАСЧЕТ БАЛЛОВ ПО РАЗДЕЛАМ (По твоим правилам)
-    for stype, data in sections_data.items():
-        score = 6.0  # Идеал
+    for stype, data in sections_dict.items():
+        # Ищем самую большую серию повторов внутри этого раздела
+        max_repeats = max([i.consecutive_violations for i in data["items"]] + [0])
 
-        # Пока пишем упрощенную базовую логику.
-        # В следующем шаге мы научим её смотреть историю "Вчера и Позавчера".
-        if data["has_repeated"]:
-            # Если есть галочка "Повторное" -> 3 балла (или 2, если 3-й день, но пока 3)
-            score = 3.0
+        has_repeat_penalty = False
 
-        elif data["has_violations"]:
-            # Обычное нарушение: считаем долю правильных ответов
-            # В твоем ТЗ: "Сумма баллов / на количество".
-            # Для раздела это: (Кол-во вопросов - Кол-во нарушений) / Кол-во вопросов * 6
-            total = len(data["items"])
-            bad = sum(1 for i in data["items"] if not i.is_compliant)
-            if total > 0:
-                score = round(6.0 * ((total - bad) / total), 2)
-            else:
-                score = 0.0
+        # ЛОГИКА ОЦЕНКИ РАЗДЕЛА (по твоему ТЗ)
+        if max_repeats >= 3:
+            score = 2.0  # Двойной повтор (и более)
+            has_repeat_penalty = True
+        elif max_repeats == 2:
+            score = 3.0  # Первый повтор
+            has_repeat_penalty = True
+        else:
+            # Повторов нет. Считаем обычные нарушения (долю)
+            total_q = len(data["items"])
+            bad_q = sum(1 for i in data["items"] if not i.is_compliant)
+            score = (
+                round(6.0 * ((total_q - bad_q) / total_q), 2) if total_q > 0 else 6.0
+            )
 
-        # Сохраняем балл за секцию
+        # Сохраняем балл Раздела в БД
         InspectionSectionScore.objects.create(
             inspection=inspection,
             date_check=inspection.date_check,
@@ -593,30 +610,112 @@ def calculate_inspection_score(inspection):
             section_type=stype,
             score=score,
         )
-        section_scores[stype] = score
+        calculated_section_scores[stype] = {
+            "score": score,
+            "has_repeat_penalty": has_repeat_penalty,
+        }
 
-    # 3. ИТОГОВЫЙ БАЛЛ ЗА ОТЧЕТ
-    # В ТЗ: Исключаем B1 и D из расчета балла конкретного отчета.
-    # Они считаются "особняком" для сводной таблицы участков.
+    # --- 2. ОЦЕНКА ОТЧЕТА В ЦЕЛОМ ---
 
-    # Собираем баллы только тех разделов, которые НЕ B1 и НЕ D
-    scores_for_final = [
-        score for stype, score in section_scores.items() if stype not in ["B1", "D"]
+    # Исключаем B1 и D (они не влияют на средний балл текущего отчета)
+    report_scores_data = [
+        data
+        for stype, data in calculated_section_scores.items()
+        if stype
+        not in [
+            "B1",
+        ]
     ]
 
-    if scores_for_final:
-        # Усредняем только "классические" разделы (A, B2, C)
-        final_score = sum(scores_for_final) / len(scores_for_final)
+    if not report_scores_data:
+        final_report_score = 6.0  # Если отчет состоял только из B1 или D
     else:
-        # Если в отчете были ТОЛЬКО B1 или D (например, отчет чисто ЭМО),
-        # то его итоговый балл будет состоять из них (чтобы не было 6.0 просто так).
-        if section_scores:
-            final_score = sum(section_scores.values()) / len(section_scores)
-        else:
-            final_score = 6.0  # Идеал, если пустой отчет
+        # Проверяем жесткое правило: Если хоть один раздел (A, B2, C) получил 3 или 2,
+        # то весь отчет получает этот низший балл!
+        # Ищем, был ли хоть в одном учитываемом разделе (A, B2, C, D) штраф за повтор
+        penalties = [d["score"] for d in report_scores_data if d["has_repeat_penalty"]]
 
-    # Обновляем шапку отчета
-    inspection.final_score = round(final_score, 2)
+        if penalties:
+            # Если есть штрафы (3.0 или 2.0), берем самый жесткий (минимальный)
+            # ТЗ: "Если было повторяющиеся нарушение... просто ставится общая оценка 3/2"
+            final_report_score = min(penalties)
+        else:
+            # Если штрафов за повтор нет -> просто считаем честное среднее
+            # (даже если там есть 1.0 за кучу новых нарушений)
+            all_scores = [d["score"] for d in report_scores_data]
+            final_report_score = sum(all_scores) / len(all_scores)
+
+    # Сохраняем балл Отчета в БД
+    inspection.final_score = round(final_report_score, 2)
     inspection.save(update_fields=["final_score"])
 
     return inspection.final_score
+
+
+def calculate_daily_location_scores(target_date):
+    """
+    ЭТАП 3: Высчитываем итоговый балл каждого УЧАСТКА за день.
+    """
+    locations = Location.objects.all()
+
+    # 1. ГЛОБАЛЬНЫЙ B1 (Для ЭМО)
+    # Берем ВСЕ сохраненные баллы разделов B1 за сегодня по всему заводу
+    all_b1_scores = InspectionSectionScore.objects.filter(
+        date_check=target_date, section_type="B1"
+    )
+
+    global_b1_score = None
+    if all_b1_scores.exists():
+        # Если где-то есть повтор (штраф 3 или 2) - он роняет весь B1 завода
+        min_b1 = all_b1_scores.aggregate(Min("score"))["score__min"]
+        if min_b1 <= 3.01:
+            global_b1_score = min_b1
+        else:
+            global_b1_score = all_b1_scores.aggregate(Avg("score"))["score__avg"]
+
+    # 2. РАСЧЕТ БАЛЛОВ УЧАСТКОВ
+    for loc in locations:
+        final_loc_score = None
+
+        # --- ЛОГИКА ЭМО ---
+        if "ЭМО" in loc.name:
+            # Берем балл раздела D (из отчетов этого участка)
+            score_d = InspectionSectionScore.objects.filter(
+                inspection__template__location=loc,
+                date_check=target_date,
+                section_type="D",
+            ).aggregate(Avg("score"))["score__avg"]
+
+            # Считаем среднее между D и глобальным B1
+            if score_d is not None and global_b1_score is not None:
+                final_loc_score = (score_d + global_b1_score) / 2
+            elif score_d is not None:
+                final_loc_score = score_d
+            elif global_b1_score is not None:
+                final_loc_score = global_b1_score
+
+        # --- ЛОГИКА ОСТАЛЬНЫХ УЧАСТКОВ (УПП, Сборка, Инструментальный...) ---
+        else:
+            # Берем ГОТОВЫЕ баллы (final_score) всех сданных отчетов этого участка
+            inspections = Inspection.objects.filter(
+                template__location=loc,
+                date_check=target_date,
+                is_completed=True,
+                final_score__isnull=False,
+            )
+
+            if inspections.exists():
+                # Просто считаем среднее арифметическое отчетов (например, 4-х отчетов УПП)
+                scores = [insp.final_score for insp in inspections]
+                final_loc_score = sum(scores) / len(scores)
+
+        # 3. СОХРАНЯЕМ БАЛЛ УЧАСТКА В БД
+        LocationDailyScore.objects.update_or_create(
+            location=loc,
+            date=target_date,
+            defaults={
+                "score": round(final_loc_score, 2)
+                if final_loc_score is not None
+                else None
+            },
+        )

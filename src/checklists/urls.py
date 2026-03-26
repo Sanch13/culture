@@ -25,6 +25,7 @@ urlpatterns = [
         views.admin_exchange_shifts,
         name="admin_exchange_shifts",
     ),
+    path("cabinet/analytics/", views.admin_analytics_dashboard, name="admin_analytics"),
     # Предпросмотр конкретного шаблона
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
     # Кабинет пользователя

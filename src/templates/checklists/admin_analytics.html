@@ -1,0 +1,178 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Аналитика{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 1. Закрепление первого столбца при горизонтальном скролле */
+    .table-responsive {
+        max-height: 80vh; /* Ограничиваем высоту, чтобы шапка тоже липла */
+        overflow: auto;
+    }
+    .table thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 2;
+    }
+    .table tbody th, .table tbody td.sticky-col {
+        position: sticky;
+        left: 0;
+        background-color: #fff;
+        z-index: 1;
+        /* Тень для визуального отрыва от скроллящегося контента */
+        box-shadow: inset -2px 0 5px -2px rgba(0,0,0,0.1);
+    }
+    /* Угловая ячейка (Шапка первого столбца) */
+    .table thead th.sticky-col {
+        z-index: 3;
+        left: 0;
+    }
+
+    /* 2. Условное форматирование (Цвета баллов) */
+    .score-bad {
+        color: #dc3545; /* Красный текст */
+        font-weight: bold;
+    }
+    .score-good {
+        color: #198754; /* Зеленый текст */
+        font-weight: bold;
+    }
+
+    /* Отступ для подчиненных строк (Отчетов) */
+    .sub-row {
+        padding-left: 2rem !important;
+        color: #6c757d;
+    }
+
+    .table-compact th, .table-compact td {
+        padding: 0.3rem 0.2rem; /* Уменьшаем отступы внутри ячеек */
+        font-size: 0.85rem; /* Чуть уменьшаем шрифт */
+    }
+
+    /* Колонка названия (Разрешаем перенос строк) */
+    .title-col {
+        min-width: 150px; /* Минимальная ширина, чтобы не сжалось в 1 букву */
+        max-width: 200px; /* Максимальная ширина, после которой текст будет переноситься */
+        white-space: normal; /* Разрешаем перенос строк! */
+        word-wrap: break-word;
+        line-height: 1.2;
+    }
+
+    /* Колонки дней (Делаем максимально узкими) */
+    .day-col {
+        min-width: 35px; /* Ширина ровно под "5.8" */
+        width: 38px;
+        text-align: center;
+    }
+
+    /*.score-bad { color: #dc3545; font-weight: bold; }*/
+    /*.score-good { color: #198754; font-weight: bold; }*/
+    /*.sub-row { padding-left: 1.5rem !important; color: #6c757d; }*/
+
+
+    .score-bad {
+        color: #dc3545; /* Красный 0-4.0 */
+        font-weight: bold;
+    }
+    .score-warning {
+        color: #fd7e14; /* Оранжевый/Желтый 4.1-5.0 */
+        font-weight: bold;
+    }
+    .score-good {
+        color: #198754; /* Зеленый 5.1-6.0 */
+        font-weight: bold;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>📈 Сводный отчет ({{ current_year }})</h1>
+
+    <!-- Фильтр по месяцам -->
+    <form method="get" class="d-flex gap-2">
+        <select name="month" class="form-select" onchange="this.form.submit()">
+            {% for m_num, m_name in months_choices %}
+                <option value="{{ m_num }}" {% if m_num == current_month %}selected{% endif %}>
+                    {{ m_name }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <!-- ДИНАМИЧЕСКИЕ ГОДА -->
+        <select name="year" class="form-select" onchange="this.form.submit()">
+            {% for y in years_choices %}
+                <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover mb-0 align-middle table-compact">
+    <thead class="table-light text-center">
+        <tr>
+            <!-- Применили класс title-col -->
+            <th class="sticky-col text-start title-col">Структурное подразделение</th>
+
+            <!-- Применили класс day-col -->
+            {% for day in work_days %}
+                <th class="day-col">{{ day|date:"d" }}</th>
+            {% endfor %}
+
+            <th class="bg-primary bg-opacity-10" style="width: 60px;">Итог</th>
+        </tr>
+    </thead>
+    <tbody class="text-center">
+        {% for row in table_rows %}
+        <tr class="{% if row.is_location %}table-secondary fw-bold{% endif %}">
+
+            <!-- Название с переносом строк -->
+            <td class="sticky-col text-start title-col {% if not row.is_location %}sub-row{% endif %}">
+                {{ row.title }}
+            </td>
+
+            <!-- Ячейки с баллами -->
+            {% for score in row.scores %}
+                <td class="day-col
+                    {% if score != None %}
+                        {% if score <= 4.0 %}score-bad
+                        {% elif score <= 5.0 %}score-warning
+                        {% else %}score-good
+                        {% endif %}
+                    {% endif %}
+                ">
+                    {% if score != None %}
+                        {{ score|floatformat:1 }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            {% endfor %}
+
+            <!-- Среднее за месяц -->
+            <td class="bg-primary bg-opacity-10 fw-bold
+                {% if row.avg_month != None %}
+                    {% if row.avg_month <= 4.0 %}score-bad
+                    {% elif row.avg_month <= 5.0 %}score-warning
+                    {% else %}score-good
+                    {% endif %}
+                {% endif %}
+            ">
+                {% if row.avg_month != None %}
+                    {{ row.avg_month|floatformat:1 }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+    </div>
+</div>
+{% endblock %}

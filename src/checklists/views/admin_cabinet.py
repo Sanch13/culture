@@ -1,5 +1,7 @@
-from datetime import timedelta
+import calendar
+from datetime import timedelta, date
 
+import holidays
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Count, Q
 from django.db import transaction
@@ -17,6 +19,9 @@ from checklists.models import (
     Schedule,
     SwapLog,
     InspectionRoute,
+    LocationDailyScore,
+    InspectionSectionScore,
+    Location,
 )
 from checklists.tasks import notify_user_about_swap
 
@@ -353,3 +358,330 @@ def admin_swap_log(request):
         "swaps": swaps,
     }
     return render(request, "checklists/admin_swaps.html", context)
+
+
+@admin_required
+def admin_analytics_dashboard(request):
+    """
+    Сводная таблица (Pivot) за выбранный месяц.
+    Учитывает праздники РБ и генерирует года динамически.
+    """
+    # 1. ГОДА И МЕСЯЦЫ
+    today = timezone.now().date()
+    year = int(request.GET.get("year", today.year))
+    month = int(request.GET.get("month", today.month))
+
+    # Динамический список лет (например, от 2024 до текущего + 1)
+    years_choices = list(range(2024, today.year + 2))
+
+    # 2. РАБОЧИЕ ДНИ МЕСЯЦА (С учетом праздников РБ)
+    by_holidays = holidays.BY(years=year)  # Загружаем праздники за выбранный год
+    _, num_days = calendar.monthrange(year, month)
+
+    work_days = []
+    for day in range(1, num_days + 1):
+        current_date = date(year, month, day)
+
+        # Проверяем: если не выходной (0-4 это Пн-Пт) И не праздник РБ
+        if current_date.weekday() < 5 and current_date not in by_holidays:
+            work_days.append(current_date)
+
+    # 3. ЗАГРУЗКА ДАННЫХ ИЗ БД
+    loc_scores = LocationDailyScore.objects.filter(date__year=year, date__month=month)
+    loc_map = {(s.location_id, s.date): s.score for s in loc_scores}
+
+    inspections = Inspection.objects.filter(
+        date_check__year=year, date_check__month=month, is_completed=True
+    ).select_related("template", "template__location")
+
+    insp_map = {}
+    for insp in inspections:
+        key = (insp.template_id, insp.date_check)
+        if key not in insp_map:
+            insp_map[key] = []
+        if insp.final_score is not None:
+            insp_map[key].append(insp.final_score)
+
+    for key, scores in insp_map.items():
+        insp_map[key] = sum(scores) / len(scores) if scores else None
+
+    # Глобальный B1
+    b1_scores = InspectionSectionScore.objects.filter(
+        date_check__year=year, date_check__month=month, section_type="B1"
+    )
+    b1_map = {}
+    for b1 in b1_scores:
+        day = b1.date_check
+        if day not in b1_map:
+            b1_map[day] = []
+        if b1.score is not None:
+            b1_map[day].append(b1.score)
+
+    for day, scores in b1_map.items():
+        if scores:
+            if min(scores) <= 3.01:
+                b1_map[day] = min(scores)
+            else:
+                b1_map[day] = sum(scores) / len(scores)
+        else:
+            b1_map[day] = None
+
+    # 4. СБОРКА ТАБЛИЦЫ
+    table_rows = []
+    locations = Location.objects.all().order_by("name")
+
+    for loc in locations:
+        # Участок
+        loc_row = {
+            "is_location": True,
+            "title": loc.name,
+            "scores": [],
+            "avg_month": None,
+        }
+        loc_sum = 0
+        loc_count = 0
+        for day in work_days:
+            score = loc_map.get((loc.id, day))
+            loc_row["scores"].append(score)
+            if score is not None:
+                loc_sum += score
+                loc_count += 1
+        if loc_count > 0:
+            loc_row["avg_month"] = round(loc_sum / loc_count, 2)
+        table_rows.append(loc_row)
+
+        # Отчеты
+        templates = loc.templates.all().order_by("name")
+        for tmpl in templates:
+            tmpl_row = {
+                "is_location": False,
+                "title": tmpl.name,
+                "scores": [],
+                "avg_month": None,
+            }
+            tmpl_sum = 0
+            tmpl_count = 0
+            for day in work_days:
+                score = insp_map.get((tmpl.id, day))
+                tmpl_row["scores"].append(score)
+                if score is not None:
+                    tmpl_sum += score
+                    tmpl_count += 1
+            if tmpl_count > 0:
+                tmpl_row["avg_month"] = round(tmpl_sum / tmpl_count, 2)
+            table_rows.append(tmpl_row)
+
+    # Состояние B1
+    b1_row = {
+        "is_location": True,
+        "title": "Состояние оборудования на участках (B1)",
+        "scores": [],
+        "avg_month": None,
+    }
+    b1_sum = 0
+    b1_count = 0
+    for day in work_days:
+        score = b1_map.get(day)
+        b1_row["scores"].append(score)
+        if score is not None:
+            b1_sum += score
+            b1_count += 1
+    if b1_count > 0:
+        b1_row["avg_month"] = round(b1_sum / b1_count, 2)
+    table_rows.append(b1_row)
+
+    # 5. ФОРМИРУЕМ МЕСЯЦЫ
+    months_choices = [
+        (1, "Январь"),
+        (2, "Февраль"),
+        (3, "Март"),
+        (4, "Апрель"),
+        (5, "Май"),
+        (6, "Июнь"),
+        (7, "Июль"),
+        (8, "Август"),
+        (9, "Сентябрь"),
+        (10, "Октябрь"),
+        (11, "Ноябрь"),
+        (12, "Декабрь"),
+    ]
+
+    context = {
+        "table_rows": table_rows,
+        "work_days": work_days,
+        "current_year": year,
+        "current_month": month,
+        "months_choices": months_choices,
+        "years_choices": years_choices,  # Передаем года
+    }
+    return render(request, "checklists/admin_analytics.html", context)
+
+
+# @admin_required
+# def admin_analytics_dashboard(request):
+#     """
+#     Сводная таблица (Pivot) за выбранный месяц.
+#     """
+#     # 1. ГОДА И МЕСЯЦЫ
+#     today = timezone.now().date()
+#     year = int(request.GET.get('year', today.year))
+#     month = int(request.GET.get('month', today.month))
+#
+#     # Динамический список лет (например, от 2024 до текущего + 1)
+#     years_choices = list(range(2024, today.year + 2))
+#
+#     # 2. РАБОЧИЕ ДНИ МЕСЯЦА (С учетом праздников РБ)
+#     by_holidays = holidays.BY(years=year)  # Загружаем праздники за выбранный год
+#     _, num_days = calendar.monthrange(year, month)
+#
+#     work_days = []
+#     for day in range(1, num_days + 1):
+#         current_date = date(year, month, day)
+#
+#         # Проверяем: если не выходной (0-4 это Пн-Пт) И не праздник РБ
+#         if current_date.weekday() < 5 and current_date not in by_holidays:
+#             work_days.append(current_date)
+#
+#     # 2. ЗАГРУЖАЕМ ДАННЫЕ ИЗ БД (Оптимизированно: 3 запроса на весь месяц)
+#
+#     # А. Сводные баллы участков (LocationDailyScore)
+#     loc_scores = LocationDailyScore.objects.filter(date__year=year, date__month=month)
+#     loc_map = {(s.location_id, s.date): s.score for s in loc_scores}
+#
+#     # Б. Баллы конкретных отчетов (Inspection)
+#     # Нам нужны только завершенные отчеты
+#     inspections = Inspection.objects.filter(
+#         date_check__year=year, date_check__month=month, is_completed=True
+#     ).select_related('template', 'template__location')
+#
+#     # Группируем отчеты: (template_id, date) -> final_score
+#     # Если в один день по одному шаблону сдали 2 отчета (редкость), берем среднее
+#     insp_map = {}
+#     for insp in inspections:
+#         key = (insp.template_id, insp.date_check)
+#         if key not in insp_map:
+#             insp_map[key] = []
+#
+#         if insp.final_score is not None:
+#             insp_map[key].append(insp.final_score)
+#
+#     for key, scores in insp_map.items():
+#         # Если список не пустой - считаем среднее
+#         if scores:
+#             insp_map[key] = sum(scores) / len(scores)
+#         else:
+#             insp_map[key] = None
+#
+#     # В. Глобальный B1 (Состояние оборудования)
+#     b1_scores = InspectionSectionScore.objects.filter(
+#         date_check__year=year, date_check__month=month, section_type='B1'
+#     )
+#     b1_map = {}
+#     # Считаем среднее B1 по заводу на каждый день (или минимум, если есть штраф 3.0)
+#     for b1 in b1_scores:
+#         day = b1.date_check
+#         if day not in b1_map:
+#             b1_map[day] = []
+#
+#         # Защита от None
+#         if b1.score is not None:
+#             b1_map[day].append(b1.score)
+#
+#     for day, scores in b1_map.items():
+#         if scores:
+#             if min(scores) <= 3.01:
+#                 b1_map[day] = min(scores)
+#             else:
+#                 b1_map[day] = sum(scores) / len(scores)
+#         else:
+#             b1_map[day] = None
+#
+#     # 3. СБОРКА СТРУКТУРЫ ТАБЛИЦЫ (Ряды)
+#     table_rows = []
+#
+#     locations = Location.objects.all().order_by('name')
+#
+#     for loc in locations:
+#         # 3.1. ДОБАВЛЯЕМ СТРОКУ УЧАСТКА (Жирную)
+#         loc_row = {
+#             'is_location': True,
+#             'title': loc.name,
+#             'scores': [],
+#             'avg_month': None
+#         }
+#
+#         loc_sum = 0
+#         loc_count = 0
+#
+#         for day in work_days:
+#             score = loc_map.get((loc.id, day))
+#             loc_row['scores'].append(score)
+#             if score is not None:
+#                 loc_sum += score
+#                 loc_count += 1
+#
+#         if loc_count > 0:
+#             loc_row['avg_month'] = round(loc_sum / loc_count, 2)
+#
+#         table_rows.append(loc_row)
+#
+#         # 3.2. ДОБАВЛЯЕМ СТРОКИ ОТЧЕТОВ (Шаблонов) ЭТОГО УЧАСТКА
+#         templates = loc.templates.all().order_by('name')
+#         for tmpl in templates:
+#             tmpl_row = {
+#                 'is_location': False,
+#                 'title': tmpl.name,
+#                 'scores': [],
+#                 'avg_month': None
+#             }
+#
+#             tmpl_sum = 0
+#             tmpl_count = 0
+#
+#             for day in work_days:
+#                 score = insp_map.get((tmpl.id, day))
+#                 tmpl_row['scores'].append(score)
+#                 if score is not None:
+#                     tmpl_sum += score
+#                     tmpl_count += 1
+#
+#             if tmpl_count > 0:
+#                 tmpl_row['avg_month'] = round(tmpl_sum / tmpl_count, 2)
+#
+#             table_rows.append(tmpl_row)
+#
+#     # 3.3. ДОБАВЛЯЕМ ОСОБУЮ СТРОКУ: "Состояние оборудования" (B1)
+#     b1_row = {
+#         'is_location': True,  # Сделаем жирной
+#         'title': 'Состояние оборудования на участках (B1)',
+#         'scores': [],
+#         'avg_month': None
+#     }
+#     b1_sum = 0
+#     b1_count = 0
+#     for day in work_days:
+#         score = b1_map.get(day)
+#         b1_row['scores'].append(score)
+#         if score is not None:
+#             b1_sum += score
+#             b1_count += 1
+#     if b1_count > 0:
+#         b1_row['avg_month'] = round(b1_sum / b1_count, 2)
+#
+#     table_rows.append(b1_row)
+#
+#     # 4. ПОДГОТОВКА СПИСКА МЕСЯЦЕВ ДЛЯ ФИЛЬТРА (Селект)
+#     months_choices = [
+#         (1, 'Январь'), (2, 'Февраль'), (3, 'Март'), (4, 'Апрель'),
+#         (5, 'Май'), (6, 'Июнь'), (7, 'Июль'), (8, 'Август'),
+#         (9, 'Сентябрь'), (10, 'Октябрь'), (11, 'Ноябрь'), (12, 'Декабрь')
+#     ]
+#
+#     context = {
+#         'table_rows': table_rows,
+#         'work_days': work_days,
+#         'current_year': year,
+#         'current_month': month,
+#         'months_choices': months_choices,
+#     }
+#     return render(request, 'checklists/admin_analytics.html', context)

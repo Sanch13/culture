@@ -14,6 +14,7 @@ from checklists.services import (
     prepare_daily_notifications,
     get_swap_notification_data,
     calculate_inspection_score,
+    calculate_daily_location_scores,
 )
 
 User = get_user_model()
@@ -144,7 +145,9 @@ def task_calculate_score(inspection_id):
         # Запускаем движок (передаем объект, а не ID)
         score = calculate_inspection_score(inspection)
 
-        return f"Отчет {inspection_id} рассчитан. Итог: {score} баллов."
+        calculate_daily_location_scores(inspection.date_check)
+
+        return f"Отчет {inspection_id} рассчитан. Итог: {score} баллов. Сводка участков обновлена."
 
     except Inspection.DoesNotExist:
         return f"Ошибка: Отчет {inspection_id} не найден."

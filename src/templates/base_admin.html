@@ -81,7 +81,10 @@
 
                 <!-- Заглушки для будущих разделов -->
                 <li class="nav-item">
-                    <a class="nav-link" href="#">Аналитика</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'admin_analytics' %}active{% endif %}"
+                       href="{% url 'admin_analytics' %}">
+                        Аналитика
+                    </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="/admin/" target="_blank">Django-Админка</a>

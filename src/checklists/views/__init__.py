@@ -10,6 +10,7 @@ from checklists.views.admin_cabinet import (
     admin_generate_schedule_view,
     admin_swap_log,
     admin_exchange_shifts,
+    admin_analytics_dashboard,
 )
 from checklists.views.employee_cabinet import (
     employee_dashboard,
@@ -41,6 +42,7 @@ __all__ = (
     "admin_generate_schedule_view",
     "admin_swap_log",
     "admin_exchange_shifts",
+    "admin_analytics_dashboard",
     "employee_dashboard",
     "inspection_form_view",
     "start_inspection_view",

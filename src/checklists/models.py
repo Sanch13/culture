@@ -244,6 +244,7 @@ class InspectionItem(models.Model):
         "Тип раздела (архив)", max_length=10, default="GENERAL"
     )
     is_repeated_violation = models.BooleanField("Повторное нарушение", default=False)
+    consecutive_violations = models.PositiveIntegerField("Нарушений подряд", default=0)
 
     # --- РЕЗУЛЬТАТЫ ---
     # True = 1 (Соответствует), False = 0 (Не соответствует)
@@ -267,8 +268,8 @@ class InspectionItem(models.Model):
 
 class InspectionSectionScore(models.Model):
     """
-    Хранит вычисленный балл за конкретный РАЗДЕЛ в рамках одного отчета.
-    Нужно для детальной аналитики (например, "Динамика чистоты пола (Раздел С) за месяц").
+    Балл за конкретный РАЗДЕЛ (A, B1, C...) в рамках одного отчета.
+    Позволяет анализировать динамику конкретных проблем (например, чистоты).
     """
 
     inspection = models.ForeignKey(
@@ -276,19 +277,18 @@ class InspectionSectionScore(models.Model):
     )
     date_check = models.DateField("Дата проверки", db_index=True)
     section_name = models.CharField("Название раздела", max_length=300)
-    section_type = models.CharField(
-        "Тип раздела", max_length=10
-    )  # 'A', 'B1', 'C' и т.д.
-
+    section_type = models.CharField("Тип раздела", max_length=20)
     score = models.FloatField("Балл за раздел")
 
     def __str__(self):
-        return f"{self.section_type} ({self.score} б.)"
+        return f"{self.date_check} | {self.section_type}: {self.score}"
 
     class Meta:
-        verbose_name = "Балл за раздел"
-        verbose_name_plural = "Баллы за разделы"
+        # Один раздел одного типа в одном отчете встречается один раз
+        unique_together = ["inspection", "section_type"]
         ordering = ["-date_check", "section_type"]
+        verbose_name = "Балл за раздел"
+        verbose_name_plural = "Аналитика: Баллы за разделы"
 
 
 class ViolationPhoto(models.Model):
@@ -392,3 +392,26 @@ class SwapLog(models.Model):
         verbose_name = "История замен"
         verbose_name_plural = "Журнал: Замены"
         ordering = ["-created_at"]
+
+
+class LocationDailyScore(models.Model):
+    """
+    Сводный итоговый балл УЧАСТКА за день.
+    (Например, среднее по 4 отчетам УПП или сложный расчет для ЭМО).
+    """
+
+    location = models.ForeignKey(
+        Location, on_delete=models.CASCADE, verbose_name="Участок"
+    )
+    date = models.DateField("Дата", db_index=True)
+    score = models.FloatField("Итоговый балл за день", null=True, blank=True)
+    calculation_details = models.TextField("Детали расчета", blank=True)
+
+    def __str__(self):
+        return f"{self.location.name} | {self.date} | {self.score}"
+
+    class Meta:
+        unique_together = ["location", "date"]
+        ordering = ["-date", "location"]
+        verbose_name = "Сводный балл участка"
+        verbose_name_plural = "Аналитика: Сводные баллы участков"
