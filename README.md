@@ -16,6 +16,7 @@ docker compose -f docker-compose.prod.yaml exec web python manage.py makemigrati
 docker compose -f docker-compose.prod.yaml exec web python manage.py migrate
 docker compose -f docker-compose.prod.yaml exec web python manage.py createsuperuser
 docker compose -f docker-compose.prod.yaml exec web python manage.py shell
+docker compose -f docker-compose.prod.yaml exec web python manage.py loaddata
 ```
 
 
@@ -49,7 +50,7 @@ docker compose -f docker-compose.prod.yaml exec web python manage.py dumpdata us
 
 # копирование фикстуры
 ```shell
-docker cp ./"all_checklists_data_2026-02-05_14:38:58.json" web-culture:/app/
+docker cp ./"init_data_2026-03-10_16:01:27.json" web-culture:/app/
 ```
 
 # загрузка данных в БД
@@ -205,3 +206,11 @@ Schedule.objects.all().delete()
 *(Должно написать что-то вроде `(15, {'checklists.Schedule': 15})`)*.
 4.  Выйди: `exit()`
 Всё, таблица расписания пуста.
+
+
+Если вы хотите полностью чистое состояние (как после создания новой БД):
+Используйте docker-compose down -v (удаляет volume с БД)
+docker-compose up -d (создает новую БД)
+docker compose -f docker-compose.prod.yaml exec web python manage.py makemigrations
+docker compose -f docker-compose.prod.yaml exec web python manage.py migrate
+docker-compose -f docker-compose.prod.yaml exec web python manage.py loaddata fixtures.json (загружает фикстуры)

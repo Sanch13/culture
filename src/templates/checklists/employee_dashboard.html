@@ -26,7 +26,7 @@
                             <div class="mt-auto">
                                 {% if task.inspection %}
                                     {% if task.inspection.is_completed %}
-                                        <button class="btn btn-success btn-lg w-100" disabled>✅ Выполнено</button>
+                                        <button class="btn btn-success btn-lg w-100" disabled>Выполнено</button>
                                     {% else %}
                                         <a href="{% url 'inspection_form' task.inspection.id %}" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm">
                                             Продолжить

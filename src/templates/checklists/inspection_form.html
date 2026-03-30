@@ -9,6 +9,8 @@
           rel="stylesheet">
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Подключаем стили Fancybox -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
 
     <!-- Подключаем собственные стили  -->
     <link href="{% static 'css/main.css' %}" rel="stylesheet"/>
@@ -99,6 +101,59 @@
         [aria-expanded="true"] .bi-chevron-down {
             transform: rotate(180deg);
         }
+
+
+        /* Увеличенный чекбокс "Повторное нарушение" */
+        .custom-checkbox-lg {
+            width: 1.2em; /* Увеличиваем размер (стандарт 1em) */
+            height: 1.2em;
+            margin-top: 0.1em; /* Выравниваем по центру относительно текста */
+            cursor: pointer;
+        }
+
+        /* Цвет фона, когда чекбокс НАЖАТ (Checked) */
+        .custom-checkbox-lg:checked {
+            background-color: #dc3545; /* Красный цвет (Danger) */
+            border-color: #dc3545;     /* Красная рамка */
+        }
+
+        /* Слегка увеличим текст лейбла, чтобы он соответствовал большому чекбоксу */
+        .label-repeated-lg {
+            font-size: 1em !important; /* Делаем текст крупнее */
+            margin-left: 0.7rem; /* Отступ от большого чекбокса */
+            padding-top: 4px;
+            cursor: pointer; /* Делаем текст кликабельным (лейбл) */
+            line-height: 1em; /* Выравниваем по центру */
+        }
+
+         /* ==================================================== */
+        /* КАСТОМИЗАЦИЯ ГАЛЕРЕИ (FANCYBOX)                      */
+        /* ==================================================== */
+
+        /* 1. Делаем фон полупрозрачным (по умолчанию он почти черный --f-bg: #000) */
+        .fancybox__container {
+            --f-bg: rgba(0, 0, 0, 0.85); /* 0.85 - это 85% непрозрачности (чем меньше цифра, тем прозрачнее) */
+        }
+
+        /* 2. Увеличиваем размер кнопки "Крестик" и стрелочек */
+        .fancybox__toolbar__items button,
+        .fancybox__nav .carousel__button {
+            width: 50px !important;    /* Ширина кнопки */
+            height: 50px !important;   /* Высота кнопки */
+        }
+
+        /* Увеличиваем саму иконку внутри кнопок */
+        .fancybox__toolbar__items button svg,
+        .fancybox__nav .carousel__button svg {
+            width: 32px !important;    /* Размер SVG иконки */
+            height: 32px !important;   /* Размер SVG иконки */
+        }
+
+        /* 3. Делаем крестик красным при наведении (опционально, для красоты) */
+        .fancybox__toolbar__items [data-fancybox-close]:hover {
+            color: #ff4d4d !important;
+        }
+
     </style>
 </head>
 <body class="bg-light">
@@ -178,7 +233,8 @@
                                     {% if item.history.photos.all %}
                                         <div class="d-flex flex-wrap gap-2">
                                             {% for photo in item.history.photos.all %}
-                                                <a href="{{ photo.image.url }}" target="_blank">
+                                                <!-- ИЗМЕНЕНИЕ: Добавлен data-fancybox -->
+                                                <a href="{{ photo.image.url }}" data-fancybox="history-{{ item.id }}" data-caption="Вчерашнее фото">
                                                     <img src="{{ photo.image.url }}"
                                                          style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px; border: 1px solid #dc3545;"
                                                          class="shadow-sm">
@@ -217,15 +273,16 @@
                             <!-- НОВЫЙ БЛОК: ЧЕКБОКС ПОВТОРНОГО НАРУШЕНИЯ -->
                             <!-- Показываем его только если есть история (item.history) -->
                             {% if item.history %}
-                            <div class="mt-2 p-2 rounded" id="repeated_block_{{ item.id }}" style="background-color: #f8d7da; border: 1px solid #f8d7da;">
-                                <div class="form-check">
-                                    <input class="form-check-input border-warning shadow-sm" type="checkbox"
+                            <div class="mt-2 p-2 rounded" id="repeated_block_{{ item.id }}">
+                                <div class="form-check d-flex align-items-center">
+                                    <input class="form-check-input border-danger shadow-sm custom-checkbox-lg" type="checkbox"
                                            name="repeated_{{ item.id }}"
                                            id="check_repeated_{{ item.id }}"
                                            value="true"
                                            {% if item.is_repeated_violation %}checked{% endif %}
                                            onchange="saveRepeatedAjax({{ item.id }}, this.checked); handleInteraction({{ item.id }});">
-                                    <label class="form-check-label small fw-bold text-danger" for="check_repeated_{{ item.id }}">
+
+                                    <label class="form-check-label fw-bold text-danger label-repeated-lg" for="check_repeated_{{ item.id }}">
                                         <i class="bi bi-exclamation-triangle"></i> Повторное нарушение
                                     </label>
                                 </div>
@@ -249,12 +306,13 @@
                                 <div class="d-flex flex-wrap gap-2 mb-2" id="photo-container-{{ item.id }}">
                                     {% for photo in item.photos.all %}
                                         <div class="position-relative photo-wrapper" id="photo-wrapper-{{ photo.id }}">
-                                            <a href="{{ photo.image.url }}" target="_blank">
+
+                                            <!-- ИЗМЕНЕНИЕ: Добавлен data-fancybox -->
+                                            <a href="{{ photo.image.url }}" data-fancybox="gallery-{{ item.id }}" data-caption="Фото нарушения">
                                                 <img src="{{ photo.image.url }}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
                                             </a>
 
-                                            <!-- Кнопка удаления (Белый кружок) -->
-                                            <!-- ВАЖНО: Проверь, что внутри deletePhoto стоят ДВА числа через запятую -->
+                                            <!-- Кнопка удаления (Без изменений) -->
                                             <button type="button"
                                                     class="btn position-absolute top-0 end-0 m-1 p-0 rounded-circle bg-white shadow-sm d-flex justify-content-center align-items-center"
                                                     style="width: 28px; height: 28px; opacity: 0.9;"
@@ -299,29 +357,12 @@
 
 
         <!-- Плавающий футер с кнопками -->
-        <div class="sticky-footer d-flex gap-2 justify-content-end">
-<!--            &lt;!&ndash; Кнопка Сохранить (остается как была) &ndash;&gt;-->
-<!--            <button type="submit" name="action" value="save" class="btn btn-secondary">-->
-<!--                💾 Сохранить черновик-->
-<!--            </button>-->
-
+        <div class="sticky-footer d-flex gap-2 justify-content-center">
             <!-- НОВАЯ Кнопка Отправить (Вызывает модалку) -->
             <button type="button" class="btn btn-primary fw-bold px-4" onclick="validateAndShowModal()">
-                ✅ Завершить и отправить
+                Завершить и отправить
             </button>
         </div>
-
-<!--        -->
-<!--        &lt;!&ndash; Футер с кнопками остался тем же &ndash;&gt;-->
-<!--        <div class="sticky-footer d-flex gap-2 justify-content-end">-->
-<!--            <button type="submit" name="action" value="save" class="btn btn-secondary">💾 Сохранить-->
-<!--            </button>-->
-<!--            <button type="submit" name="action" value="complete"-->
-<!--                    class="btn btn-success fw-bold px-4"-->
-<!--                    onclick="return confirm('Завершить проверку?');">✅ Отправить-->
-<!--            </button>-->
-<!--        </div>-->
-<!--        -->
 
     </form>
 </div>
@@ -429,7 +470,26 @@
 
 <!-- ПОДКЛЮЧЕНИЕ СКРИПТОВ BOOTSTRAP (ОБЯЗАТЕЛЬНО) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
 <script>
+    Fancybox.bind("[data-fancybox]", {
+        // Опции (по желанию, можно оставить пустым {})
+        loop: true, // Зациклить листание
+        Toolbar: {
+            display: {
+                left: ["infobar"],
+                middle: [
+                    "zoomIn",
+                    "zoomOut",
+                    "toggle1to1",
+                    "rotateCCW",
+                    "rotateCW",
+                ],
+                right: ["slideshow", "thumbs", "close"],
+            },
+        },
+    });
+
     // 1. Получаем CSRF токен
     function getCookie(name) {
         let cookieValue = null;
@@ -607,9 +667,12 @@
                     // ... (код генерации HTML картинки остается тем же) ...
                     const html = `
                         <div class="position-relative photo-wrapper" id="photo-wrapper-${photo.id}">
-                            <a href="${photo.url}" target="_blank">
+
+                            <!-- ИЗМЕНЕНИЕ ЗДЕСЬ (target="_blank" заменен на data-fancybox) -->
+                            <a href="${photo.url}" data-fancybox="gallery-${itemId}" data-caption="Новое фото">
                                 <img src="${photo.url}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
                             </a>
+
                             <button type="button" class="btn position-absolute top-0 end-0 m-1 p-0 rounded-circle bg-white shadow-sm d-flex justify-content-center align-items-center" style="width: 28px; height: 28px; opacity: 0.9;" onclick="deletePhoto(${photo.id}, ${itemId})">
                                 <i class="bi bi-trash-fill text-danger" style="font-size: 14px;"></i>
                             </button>

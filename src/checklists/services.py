@@ -498,7 +498,7 @@ def is_global_viewer(user):
     # 1. Глобальные роли по умолчанию
     if user.role in [
         User.ROLE_PRODUCTION_CHIEF,
-        User.ROLE_ENGINEER_CHIEF,
+        User.ROLE_OBSERVER,
         User.ROLE_ADMIN,
     ]:
         return True

@@ -47,7 +47,7 @@ class User(AbstractUser):
     ROLE_MASTER = "master"
 
     ROLE_PRODUCTION_CHIEF = "production_chief"
-    ROLE_ENGINEER_CHIEF = "engineer_chief"
+    ROLE_OBSERVER = "observer"
     ROLE_ADMIN = "admin"
 
     ROLE_CHOICES = [
@@ -57,7 +57,7 @@ class User(AbstractUser):
         (ROLE_SENIOR_MASTER, "Старший мастер"),
         (ROLE_MASTER, "Мастер участка"),
         (ROLE_PRODUCTION_CHIEF, "Начальник производства"),
-        (ROLE_ENGINEER_CHIEF, "Главный инженер"),
+        (ROLE_OBSERVER, "Наблюдатель (Видит всё)"),
         (ROLE_ADMIN, "Администратор"),
     ]
 

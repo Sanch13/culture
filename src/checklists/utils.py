@@ -7,7 +7,7 @@ from email.message import Message
 from django.conf import settings
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
-from PIL import Image
+from PIL import Image, ImageOps
 import phonenumbers
 import pillow_heif
 
@@ -87,9 +87,17 @@ def get_data_information_about_department(department) -> tuple[str, str]:
 def compress_image(image, quality=80, max_width=1280):
     output = BytesIO()
 
-    # Используем контекстный менеджер для безопасности
     with Image.open(image) as img:
-        # Конвертация цвета
+        # --- 1. МАГИЯ EXIF (Ориентация) ---
+        # Эта функция читает EXIF тег Orientation и физически вращает изображение (на 90, 180, 270 градусов).
+        # Если тега нет (или это скриншот/android) — она ничего не делает и работает быстро.
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception as e:
+            # На случай странных или поврежденных EXIF-данных просто игнорируем ошибку
+            print(f"Ошибка при чтении EXIF: {e}")
+
+        # --- 2. Конвертация цвета ---
         if img.mode in ("RGBA", "LA"):
             background = Image.new(img.mode[:-1], img.size, "#fff")
             background.paste(img, img.split()[-1])
@@ -97,9 +105,9 @@ def compress_image(image, quality=80, max_width=1280):
         elif img.mode != "RGB":
             img_to_save = img.convert("RGB")
         else:
-            img_to_save = img.copy()  # Копируем, чтобы не зависеть от закрытия img
+            img_to_save = img.copy()
 
-        # Ресайз
+        # --- 3. Ресайз ---
         width, height = img_to_save.size
         if width > max_width:
             ratio = max_width / width
@@ -108,13 +116,15 @@ def compress_image(image, quality=80, max_width=1280):
                 (max_width, new_height), Image.Resampling.LANCZOS
             )
 
-        # Сохранение (здесь происходит реальная работа)
+        # --- 4. Сохранение ---
         img_to_save.save(output, format="WEBP", quality=quality, optimize=True)
 
-    # После выхода из with файл Pillow закроется, но буфер output останется
     output.seek(0)
 
-    new_name = image.name.split(".")[0] + ".webp"
+    # Безопасное формирование имени (замена спецсимволов)
+    # Чтобы избежать ошибок, если имя файла содержит пробелы или странные символы
+    safe_name = image.name.split("/")[-1].split("\\")[-1]
+    new_name = safe_name.rsplit(".", 1)[0] + ".webp"
 
     return InMemoryUploadedFile(
         output, "ImageField", new_name, "image/webp", sys.getsizeof(output), None
