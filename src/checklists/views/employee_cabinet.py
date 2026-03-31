@@ -57,6 +57,14 @@ def employee_dashboard(request):
     # Список задач СТРОГО на сегодня
     today_tasks = [t for t in week_schedule if t.date == today]
 
+    # СЧИТАЕМ ОСТАВШИЕСЯ (НЕЗАВЕРШЕННЫЕ) ЗАДАЧИ:
+    remaining_tasks_count = 0
+    if today_tasks:
+        for t in today_tasks:
+            # Если отчета нет вообще (еще не начат) ИЛИ он начат, но не завершен
+            if not t.inspection or not t.inspection.is_completed:
+                remaining_tasks_count += 1
+
     # ПРОВЕРКА ДЛЯ КНОПКИ АВТОЗАМЕНЫ
     # Можно ли сегодня меняться? (Только если ни один отчет еще не начат)
     can_swap_today = False
@@ -92,6 +100,7 @@ def employee_dashboard(request):
         "future_tasks": future_tasks,
         "days_until": days_until,
         "my_inspections": my_inspections,
+        "remaining_tasks_count": remaining_tasks_count,
         # "holiday_name": holiday_name,
     }
     return render(request, "checklists/employee_dashboard.html", context)

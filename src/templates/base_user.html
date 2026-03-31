@@ -19,13 +19,15 @@
 <body class="bg-light">
 
 <!-- МЕНЮ НАВИГАЦИИ (NAVBAR) -->
-<nav class="navbar navbar-expand-md navbar-dark bg-primary fixed-top shadow-sm">
+<nav class="navbar navbar-expand-md navbar-light bg-white fixed-top shadow-sm">
     <div class="container">
         <!-- Логотип -->
-        <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{% url 'employee_dashboard' %}">
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2 py-0 m-0" href="{% url 'employee_dashboard' %}" style="height: 70px;">
             <!-- Настраиваем размер логотипа прямо здесь (или выносим в класс .nav-logo) -->
             <img src="{% static 'img/logo-bg.png' %}" alt="Логотип" class="nav-logo">
-            Культура производства
+            <span class="lh-sm" style="font-size: 1.1rem; max-width: 250px; white-space: normal;">
+                Культура производства
+            </span>
         </a>
 
         <!-- Кнопка "Гамбургер" для мобильных -->
@@ -37,7 +39,7 @@
             <!-- Левая часть меню -->
             <ul class="navbar-nav me-auto mb-2 mb-md-0">
                 <li class="nav-item">
-                    <a class="nav-link text-white {% if request.resolver_match.url_name == 'profile_edit' %}active fw-bold{% endif %}"
+                    <a class="nav-link text-dark {% if request.resolver_match.url_name == 'profile_edit' %}active fw-bold{% endif %}"
                        href="{% url 'users:profile_edit' %}">
                        {{ user.first_name }} {{ user.last_name }}
                     </a>
@@ -80,7 +82,7 @@
                 <!-- Кнопка Выход -->
                 <form action="{% url 'users:logout' %}" method="post" class="d-inline">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-light fw-bold px-3">
+                    <button type="submit" class="btn btn-sm btn-secondary fw-bold px-3">
                         Выйти
                     </button>
                 </form>

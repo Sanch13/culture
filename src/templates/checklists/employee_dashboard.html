@@ -9,7 +9,15 @@
 
     {% if today_tasks %}
         <!-- СЦЕНАРИЙ: СЕГОДНЯ ЕСТЬ РАБОТА -->
-        <h4 class="mb-3 text-secondary">Задания на сегодня ({{ today_tasks|length }} шт.)</h4>
+        <h4 class="mb-3 text-secondary d-flex align-items-center">
+            Задания на сегодня
+            <!-- Если остались задачи -> Показываем красную цифру, иначе зеленую 0 -->
+            {% if remaining_tasks_count > 0 %}
+                <span class="ms-2">{{ remaining_tasks_count }} шт.</span>
+            {% else %}
+                <span class="ms-2">0 шт.</span>
+            {% endif %}
+        </h4>
 
         <!-- СЕТКА КАРТОЧЕК -->
         <div class="row row-cols-1 {% if today_tasks|length > 1 %}row-cols-md-2{% endif %} g-4 mb-4">
@@ -18,7 +26,7 @@
                     <div class="card shadow-sm border-primary h-100 d-flex flex-column">
                         <div class="card-body text-center p-4 d-flex flex-column flex-grow-1">
 
-                            <h2 class="text-primary mb-2">{{ task.template.name }}</h2>
+                            <h2 class="text-miran mb-2">{{ task.template.name }}</h2>
                             <p class="text-muted flex-grow-1">{{ task.template.location.name }}</p>
                             <hr>
 
@@ -26,7 +34,7 @@
                             <div class="mt-auto">
                                 {% if task.inspection %}
                                     {% if task.inspection.is_completed %}
-                                        <button class="btn btn-success btn-lg w-100" disabled>Выполнено</button>
+                                        <button class="btn btn-secondary btn-lg w-100" disabled>Выполнено</button>
                                     {% else %}
                                         <a href="{% url 'inspection_form' task.inspection.id %}" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm">
                                             Продолжить
@@ -94,10 +102,13 @@
             </div>
 
         {% else %}
-            <!-- Информационное сообщение (появляется, когда кнопка исчезла) -->
-            <div class="text-center text-muted small mb-5">
-                <i class="bi bi-lock-fill"></i> Проверка начата. Автозамена недоступна.
-            </div>
+            <!-- НОВОЕ УСЛОВИЕ: Показываем этот текст ТОЛЬКО если есть НЕЗАВЕРШЕННЫЕ задачи -->
+            {% if remaining_tasks_count > 0 %}
+                <div class="text-center text-muted small mb-5">
+                    <i class="bi bi-lock-fill"></i> Проверка начата. Автозамена недоступна.
+                </div>
+            {% else %}
+            {% endif %}
         {% endif %}
 
 

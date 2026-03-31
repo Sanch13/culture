@@ -15,6 +15,9 @@ from checklists.services import (
     get_swap_notification_data,
     calculate_inspection_score,
     calculate_daily_location_scores,
+    prepare_weekly_notifications,
+    prepare_monday_reminders,
+    prepare_overdue_notifications,
 )
 
 User = get_user_model()
@@ -154,3 +157,90 @@ def task_calculate_score(inspection_id):
     except Exception as e:
         # Логируем любую непредвиденную ошибку (например, деление на ноль)
         return f"КРИТИЧЕСКАЯ ОШИБКА при расчете отчета {inspection_id}: {str(e)}"
+
+
+@shared_task
+def send_weekly_schedule_digest():
+    """
+    Задача: Рассылка плана на следующую неделю.
+    Запускается по пятницам в 14:30.
+    """
+    emails_to_send = prepare_weekly_notifications()
+
+    if not emails_to_send:
+        return "Нет заданий на следующую неделю. Рассылка не выполнена."
+
+    success_count = 0
+    for data in emails_to_send:
+        try:
+            send_email.delay(
+                to=data["recipient_email"], subject=data["subject"], body=data["body"]
+            )
+            success_count += 1
+            print(f"📧 [WEEKLY DIGEST] Sent to {data['recipient_email']}")
+        except Exception as e:
+            print(f"❌ Error sending to {data['recipient_email']}: {e}")
+
+    return f"Успешно отправлено {success_count} еженедельных дайджестов."
+
+
+@shared_task
+def send_monday_reminders():
+    """
+    Задача: Рассылка напоминаний в понедельник утром.
+    """
+    emails_to_send = prepare_monday_reminders()
+
+    if not emails_to_send:
+        return "Нет заданий на эту неделю (со Вт по Вс). Рассылка не выполнена."
+
+    success_count = 0
+    for data in emails_to_send:
+        try:
+            send_email.delay(
+                to=data["recipient_email"], subject=data["subject"], body=data["body"]
+            )
+            success_count += 1
+        except Exception as e:
+            print(f"❌ Error queuing email for {data['recipient_email']}: {e}")
+
+    return f"Успешно поставлено в очередь {success_count} напоминаний на понедельник."
+
+
+@shared_task
+def send_admin_overdue_report():
+    """
+    Задача: Рассылка списка должников администраторам (в 14:00).
+    """
+    report_body = prepare_overdue_notifications()
+
+    if not report_body:
+        return "Должников нет или сегодня выходной. Письмо не отправлено."
+
+    # Находим всех активных администраторов
+    admins = User.objects.filter(role=User.ROLE_ADMIN, is_active=True)
+
+    admin_emails = [admin.email for admin in admins if admin.email]
+
+    if not admin_emails:
+        return "Ошибка: В системе нет активных администраторов с email."
+
+    # --- Подмена для теста (ПОТОМ УДАЛИТЬ) ---
+    admin_emails = ["a.zubchyk@miran-bel.com"]
+    # ----------------------------------------
+
+    success_count = 0
+    subject = (
+        f"🚨 ВНИМАНИЕ: Незавершенные проверки на {timezone.now().strftime('%d.%m.%Y')}"
+    )
+
+    # Отправим каждому отдельно, чтобы у всех в ящике было красиво:
+    for email in admin_emails:
+        try:
+            send_email(to=email, subject=subject, body=report_body)
+            success_count += 1
+            print(f"📧 [ADMIN OVERDUE] Sent to {email}")
+        except Exception as e:
+            print(f"❌ Error sending to {email}: {e}")
+
+    return f"Успешно отправлено {success_count} отчетов администраторам."

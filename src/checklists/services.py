@@ -333,7 +333,10 @@ def build_composite_email_body(schedules, intro_message):
     # 4. Добавляем главного босса (один раз в конце)
     body.append(_get_production_chief_text())
 
-    body.append("\n------------------------")
+    body.append("------------------------")
+    body.append(
+        "Если вы не можете выполнить проверку, воспользуйтесь кнопкой 'Автозамена' в личном кабинете."
+    )
     body.append("Пожалуйста, не забудьте заполнить отчеты в системе.")
 
     return "\n".join(body)
@@ -444,11 +447,6 @@ def prepare_daily_notifications(target_date=None):
                 "body": body,
             }
         )
-
-    # Подмена для теста ПОТОМ удалить !!!
-    for item in notifications_data:
-        item["recipient_email"] = "a.zubchyk@miran-bel.com"
-    # Подмена для теста ПОТОМ удалить !!!
 
     return notifications_data
 
@@ -741,3 +739,264 @@ def is_working_day(target_date):
 
     # Если ничего не совпало - это обычный Пн-Пт
     return True
+
+
+def prepare_weekly_notifications():
+    """
+    Данные для ЕЖЕНЕДЕЛЬНОЙ рассылки (План на следующую неделю).
+    Запускается в пятницу.
+    """
+    today = timezone.now().date()
+
+    # 1. Вычисляем диапазон СЛЕДУЮЩЕЙ недели (Пн - Вс)
+    # Если сегодня пятница (4), до следующего понедельника 3 дня.
+    days_until_next_monday = 7 - today.weekday()
+    start_of_next_week = today + datetime.timedelta(days=days_until_next_monday)
+    end_of_next_week = start_of_next_week + datetime.timedelta(days=6)
+
+    # 2. Загружаем расписание на следующую неделю
+    # Сортировка по inspector_id ОБЯЗАТЕЛЬНА для groupby
+    schedules = (
+        Schedule.objects.filter(date__range=[start_of_next_week, end_of_next_week])
+        .select_related(
+            "inspector",
+            "template",
+            "template__location",
+            "template__location__manager",
+        )
+        .prefetch_related(
+            "template__location__masters",
+            "template__location__deputies",
+            "template__location__senior_masters",
+        )
+        .order_by(
+            "inspector_id", "date"
+        )  # Сортируем по юзеру, а внутри юзера - по дате
+    )
+
+    notifications_data = []
+
+    # 3. Группируем задачи по каждому сотруднику
+    for inspector, items_iter in groupby(schedules, key=lambda s: s.inspector):
+        if not inspector.email:
+            continue
+
+        user_tasks = list(items_iter)
+
+        # 4. Формируем тело письма (Дайджест)
+        # Так как задач может быть много (на Пн, Ср, Пт), мы не можем использовать
+        # стандартный build_composite_email_body (он рассчитан на один день).
+        # Напишем кастомный сборщик дайджеста.
+
+        body_lines = [
+            f"Здравствуйте, {inspector.first_name}!\n",
+            f"Направляем вам график плановых проверок на следующую неделю ({start_of_next_week.strftime('%d.%m')} - {end_date_str_format(end_of_next_week)}).\n",
+            "📋 ВАШ ПЛАН:\n",
+        ]
+
+        unique_locations = set()
+
+        # Группируем задачи сотрудника еще и по дням (чтобы было красиво: Понедельник: Раздув, Вторник: ЦПМ)
+        for date_key, day_tasks_iter in groupby(user_tasks, key=lambda t: t.date):
+            day_tasks = list(day_tasks_iter)
+
+            # Название дня недели (0=Пн, 1=Вт...)
+            weekdays_ru = [
+                "Понедельник",
+                "Вторник",
+                "Среда",
+                "Четверг",
+                "Пятница",
+                "Суббота",
+                "Воскресенье",
+            ]
+            day_name = weekdays_ru[date_key.weekday()]
+
+            body_lines.append(f"📅 {day_name} ({date_key.strftime('%d.%m')}):")
+
+            for task in day_tasks:
+                loc = task.template.location
+                unique_locations.add(loc)
+                body_lines.append(f"   - {task.template.name} (Участок: {loc.name})")
+            body_lines.append("")  # Пустая строка между днями
+
+        # 5. Добавляем контакты руководства (для всех участков, куда он пойдет на неделе)
+        body_lines.append("--- КОНТАКТЫ ДЛЯ СВЯЗИ ---")
+        for loc in unique_locations:
+            body_lines.append(f"\n🏢 {loc.name.upper()}")
+            body_lines.append(_get_location_contacts_text(loc))
+
+        # Добавляем главного босса
+        body_lines.append(_get_production_chief_text())
+
+        body_lines.append("------------------------")
+        body_lines.append(
+            "Если вы не можете выполнить проверку, воспользуйтесь кнопкой 'Автозамена' в личном кабинете."
+        )
+        body_lines.append(
+            "Пожалуйста, планируйте свое рабочее время с учетом этого графика."
+        )
+
+        # 6. Добавляем готовое письмо в список рассылки
+        notifications_data.append(
+            {
+                "recipient_email": inspector.email,
+                "subject": f"🗓 Ваш график проверок на неделю ({start_of_next_week.strftime('%d.%m')} - {end_of_next_week.strftime('%d.%m')})",
+                "body": "\n".join(body_lines),
+            }
+        )
+
+    return notifications_data
+
+
+def end_date_str_format(date_obj):
+    return date_obj.strftime("%d.%m")
+
+
+def prepare_monday_reminders():
+    """
+    Данные для рассылки В ПОНЕДЕЛЬНИК утром.
+    Напоминает о проверках на ТЕКУЩЕЙ неделе (со Вторника по Воскресенье).
+    """
+    today = timezone.now().date()
+
+    # 1. Вычисляем диапазон (Завтра - Конец недели)
+    # Сегодня понедельник, значит начинаем со вторника (+1 день)
+    start_date = today + datetime.timedelta(days=1)
+
+    # Конец недели (Воскресенье)
+    days_until_sunday = 6 - today.weekday()
+    end_date = today + datetime.timedelta(days=days_until_sunday)
+
+    # 2. Загружаем расписание
+    schedules = (
+        Schedule.objects.filter(date__range=[start_date, end_date])
+        .select_related(
+            "inspector",
+            "template",
+            "template__location",
+            "template__location__manager",
+        )
+        .prefetch_related(
+            "template__location__masters",
+            "template__location__deputies",
+            "template__location__senior_masters",
+        )
+        .order_by("inspector_id", "date")
+    )
+
+    notifications_data = []
+
+    # 3. Группируем по инспектору (как мы делали в пятничной рассылке)
+    for inspector, items_iter in groupby(schedules, key=lambda s: s.inspector):
+        if not inspector.email:
+            continue
+
+        user_tasks = list(items_iter)
+
+        # 4. Формируем текст письма
+        body_lines = [
+            f"Здравствуйте, {inspector.first_name}!\n",
+            "Напоминаем ваш график плановых проверок на эту неделю:\n",
+        ]
+
+        unique_locations = set()
+
+        # Группируем по дням
+        for date_key, day_tasks_iter in groupby(user_tasks, key=lambda t: t.date):
+            day_tasks = list(day_tasks_iter)
+
+            weekdays_ru = [
+                "Понедельник",
+                "Вторник",
+                "Среда",
+                "Четверг",
+                "Пятница",
+                "Суббота",
+                "Воскресенье",
+            ]
+            day_name = weekdays_ru[date_key.weekday()]
+
+            body_lines.append(f"📅 {day_name} ({date_key.strftime('%d.%m')}):")
+
+            for task in day_tasks:
+                loc = task.template.location
+                unique_locations.add(loc)
+                body_lines.append(f"   - {task.template.name} (Участок: {loc.name})")
+            body_lines.append("")
+
+            # 5. Контакты руководства
+        body_lines.append("--- КОНТАКТЫ ДЛЯ СВЯЗИ ---")
+        for loc in unique_locations:
+            body_lines.append(f"\n🏢 {loc.name.upper()}")
+            body_lines.append(_get_location_contacts_text(loc))
+
+        body_lines.append(_get_production_chief_text())
+        body_lines.append("------------------------")
+        body_lines.append(
+            "Если вы не можете выполнить проверку, воспользуйтесь кнопкой 'Автозамена' в личном кабинете."
+        )
+        body_lines.append(
+            "Пожалуйста, планируйте свое рабочее время с учетом этого графика."
+        )
+
+        # 6. Добавляем в список отправки
+        notifications_data.append(
+            {
+                "recipient_email": inspector.email,
+                "subject": "🔔 Напоминание: График проверок на эту неделю",
+                "body": "\n".join(body_lines),
+            }
+        )
+
+    return notifications_data
+
+
+def prepare_overdue_notifications():
+    """
+    Ищет все невыполненные (или неначатые) проверки за СЕГОДНЯ.
+    Возвращает текст письма для администраторов.
+    """
+    today = timezone.now().date()
+
+    # Если сегодня выходной/праздник по нашей логике - пропускаем
+    if not is_working_day(today):
+        return None
+
+    # Ищем записи в расписании на сегодня, у которых:
+    # 1. Вообще нет отчета (inspection is null)
+    # ИЛИ
+    # 2. Отчет есть, но он не завершен (inspection__is_completed=False)
+    overdue_schedules = (
+        Schedule.objects.filter(date=today)
+        .filter(Q(inspection__isnull=True) | Q(inspection__is_completed=False))
+        .select_related("inspector", "template", "template__location")
+        .order_by("template__location__name", "inspector__last_name")
+    )
+
+    if not overdue_schedules.exists():
+        return None  # Все молодцы, долгов нет
+
+    # Формируем тело письма для Админов
+    body_lines = [
+        "Уважаемый администратор,\n",
+        f"По состоянию на 14:00 сегодняшнего дня ({today.strftime('%d.%m.%Y')}) ",
+        "следующие плановые проверки НЕ ЗАВЕРШЕНЫ:\n",
+    ]
+
+    # Группируем по участкам для читаемости
+    for location, tasks_iter in groupby(
+        overdue_schedules, key=lambda s: s.template.location
+    ):
+        body_lines.append(f"\n🏢 {location.name.upper()}")
+
+        for task in tasks_iter:
+            status = "⏳ В процессе (Черновик)" if task.inspection else "❌ Не начато"
+            body_lines.append(
+                f"   - {task.inspector.get_full_name()} -> {task.template.name} [{status}]"
+            )
+
+    body_lines.append("\n------------------------")
+    body_lines.append("Пожалуйста, свяжитесь с ответственными сотрудниками.")
+
+    return "\n".join(body_lines)

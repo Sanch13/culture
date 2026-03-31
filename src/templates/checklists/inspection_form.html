@@ -166,7 +166,7 @@
             <h2 class="mb-0">{{ inspection.template.name }}</h2>
             <p class="text-muted">{{ inspection.location_snapshot }} | {{ inspection.date_check}}</p>
         </div>
-        <a href="{% url 'employee_dashboard' %}" class="btn btn-outline-primary">✕ Закрыть</a>
+        <a href="{% url 'employee_dashboard' %}" class="btn btn-secondary">✕ Закрыть</a>
     </div>
 
     <!-- Основная форма -->
@@ -182,17 +182,17 @@
             <div class="card-header bg-white fw-bold py-3 text-primary border-bottom-0 d-flex justify-content-between align-items-center"
                  data-bs-toggle="collapse"
                  data-bs-target="#sectionCollapse{{ forloop.counter }}"
-                 aria-expanded="false"
+                 aria-expanded="true"
                  aria-controls="sectionCollapse{{ forloop.counter }}"
                  style="cursor: pointer;">
-                <span>
+                <span class="text-miran">
                     {{ section_name }}
                 </span>
                 <i class="bi bi-chevron-down text-muted transition-transform"></i>
             </div>
 
             <!-- СВОРАЧИВАЕМЫЙ БЛОК (Скрыт по умолчанию) -->
-            <div id="sectionCollapse{{ forloop.counter }}" class="collapse">
+            <div id="sectionCollapse{{ forloop.counter }}" class="collapse show">
                 <div class="card-body p-0 border-top">
                     {% for item in items %}
                         <div class="p-3 border-top {% if not forloop.first %}border-top{% endif %}">
@@ -210,17 +210,17 @@
                                     class="btn btn-sm w-100 text-start d-flex justify-content-between align-items-center"
                                     data-bs-toggle="collapse"
                                     data-bs-target="#history-{{ item.id }}"
-                                    aria-expanded="false"
+                                    aria-expanded="true"
                                     style="background-color: #f8d7da; border-color: #f5c6cb; color: #721c24;">
                                 <span>
                                     <i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>
                                     <strong>Внимание!</strong> Нарушение ({{ item.history.inspection.date_check|date:"d.m.Y" }})
                                 </span>
-                                <i class="bi bi-chevron-down"></i>
+                                <i class="bi bi-chevron-down transition-transform"></i>
                             </button>
 
                             <!-- Разворачиваемый контент -->
-                            <div class="collapse" id="history-{{ item.id }}">
+                            <div class="collapse show" id="history-{{ item.id }}">
                                 <div class="card card-body border-danger border-top-0 rounded-0 rounded-bottom bg-light p-2"
                                      style="border-color: #f5c6cb !important;">
 

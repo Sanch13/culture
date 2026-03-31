@@ -20,12 +20,14 @@
 <body>
 
 <!-- ВЕРХНЕЕ МЕНЮ (NAVBAR) -->
-<nav class="navbar navbar-expand-lg bg-primary navbar-dark bg-dark fixed-top">
+<nav class="navbar navbar-expand-lg navbar-light bg-white bg-dark fixed-top">
     <div class="container">
-        <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{% url 'admin_dashboard' %}">
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2 py-0 m-0" href="{% url 'admin_dashboard' %}">
             <!-- Настраиваем размер логотипа прямо здесь (или выносим в класс .nav-logo) -->
             <img src="{% static 'img/logo-bg.png' %}" alt="Логотип" class="nav-logo">
-            Культура производства
+            <span class="lh-sm" style="font-size: 1.1rem; max-width: 150px; white-space: normal;">
+                Культура производства
+            </span>
         </a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
@@ -97,7 +99,7 @@
                 </span>
             <form action="{% url 'users:logout' %}" method="post" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-light text-primary">
+                <button type="submit" class="btn btn-sm btn-secondary">
                     Выйти
                 </button>
             </form>

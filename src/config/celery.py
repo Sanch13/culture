@@ -10,14 +10,12 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
-    # Задача 1: Генерация расписания
+    # Задача 1: Генерация расписания. Запуск каждую пятницу в 14:20
     "generate-schedule-every-friday": {
         "task": "checklists.tasks.task_generate_weekly_schedule",
-        # Запуск каждую пятницу в 18:00
-        # 'schedule': crontab(day_of_week='wednesday', hour=12, minute=38),
-        "schedule": crontab(day_of_week="friday", hour=18, minute=00),
+        "schedule": crontab(day_of_week="friday", hour=14, minute=20),
     },
-    # Задача 2: (Пример на будущее) Отправка email
+    # Задача 2: Отправка email админу
     # 'send_admin_email': {
     #     'task': 'checklists.tasks.send_admin_email',
     #     'schedule': crontab(hour=15, minute=18, day_of_week='mon-fri'),
@@ -25,7 +23,24 @@ app.conf.beat_schedule = {
     # Задача 3: Ежедневная отправка email с напоминанием о проверке (9 утра)
     "send_inspection_reminders": {
         "task": "checklists.tasks.send_inspection_reminders",
-        "schedule": crontab(hour=9, minute=0, day_of_week="mon-fri"),
+        "schedule": crontab(hour=9, minute=0, day_of_week="*"),
+    },
+    # Задача 4: Отправка email (в Пт 14:30) всем проверяющим на след. неделе
+    "send-weekly-digest-friday": {
+        "task": "checklists.tasks.send_weekly_schedule_digest",
+        "schedule": crontab(day_of_week="friday", hour=14, minute=30),
+    },
+    # Задача 5: Напоминание в пн (09:00) всем проверяющим на этой неделе с вт
+    "send-monday-reminders": {
+        "task": "checklists.tasks.send_monday_reminders",
+        "schedule": crontab(day_of_week="monday", hour=9, minute=0),
+    },
+    # Задача 6: Письмо для админов по должникам за день (Ежедневно в 14:00)
+    "send-admin-overdue-report": {
+        "task": "checklists.tasks.send_admin_overdue_report",
+        # Запускаем каждый день (Пн-Вс).
+        # Если сегодня выходной, функция is_working_day внутри сервиса сама отменит отправку.
+        "schedule": crontab(hour=14, minute=0),
     },
     # "sync-mailcow-emails": {
     #     "task": "users.tasks.task_sync_corporate_emails",
