@@ -63,4 +63,5 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("user/profile/", views.profile_edit, name="profile_edit"),
+    path("activate/<uidb64>/<token>/", views.activate_email, name="activate_email"),
 ]

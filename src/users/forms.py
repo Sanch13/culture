@@ -2,7 +2,6 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 
-from users.models import AllowedCorporateEmail
 
 User = get_user_model()
 
@@ -89,11 +88,11 @@ class CustomUserCreationForm(UserCreationForm):
 
         # 3. ПРОВЕРКА ПО БЕЛОМУ СПИСКУ (Mailcow)
         # Если почты нет в таблице разрешенных - запрещаем регистрацию
-        if not AllowedCorporateEmail.objects.filter(email=email).exists():
-            raise forms.ValidationError(
-                "Ваш Email не найден в корпоративном справочнике. "
-                "Если вы новый сотрудник, дождитесь синхронизации баз данных или обратитесь к администратору."
-            )
+        # if not AllowedCorporateEmail.objects.filter(email=email).exists():
+        #     raise forms.ValidationError(
+        #         "Ваш Email не найден в корпоративном справочнике. "
+        #         "Если вы новый сотрудник, дождитесь синхронизации баз данных или обратитесь к администратору."
+        #     )
 
         return email
 
