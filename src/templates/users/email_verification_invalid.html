@@ -4,9 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title></title>
+    <title>Ошибка активации</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
           rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
     <!-- Подключаем собственные стили  -->
     <link href="{% static 'css/main.css' %}" rel="stylesheet"/>
@@ -17,7 +18,13 @@
 <div class="text-center mt-5">
     <h1 class="display-1 text-danger"><i class="bi bi-x-circle"></i></h1>
     <h3>Ссылка недействительна</h3>
-    <p>Возможно, срок действия ссылки истек (3 дня) или вы уже активировали аккаунт ранее.</p>
+    <p>Возможно, срок действия ссылки истек или вы уже активировали аккаунт ранее.</p>
+
+    <div class="alert text-center small">
+        <strong>Что делать дальше?</strong><br>
+        Если вы еще не заходили в систему, пожалуйста, обратитесь к администратору для ручной активации учетной записи.
+    </div>
+
     <a href="{% url 'users:login' %}" class="btn btn-primary mt-3">Перейти ко входу</a>
 </div>
 
