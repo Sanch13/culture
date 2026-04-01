@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Count, Q
 from django.db import transaction
@@ -367,15 +368,46 @@ def admin_generate_schedule_view(request):
 @admin_required
 def admin_swap_log(request):
     """
-    Журнал замен смен.
+    Журнал замен смен с фильтрацией и пагинацией.
     """
-    # Сортируем: новые сверху (-created_at)
-    swaps = SwapLog.objects.select_related("requestor", "target_user").order_by(
+    # 1. Базовый запрос
+    queryset = SwapLog.objects.select_related("requestor", "target_user").order_by(
         "-created_at"
     )
 
+    # 2. ФИЛЬТРАЦИЯ (Считываем параметры из URL)
+    date_from = request.GET.get("date_from", "")
+    date_to = request.GET.get("date_to", "")
+    search_query = request.GET.get("q", "")
+
+    # Применяем фильтры
+    if date_from:
+        # Фильтруем по дате создания записи (когда произошла замена)
+        queryset = queryset.filter(created_at__date__gte=date_from)
+
+    if date_to:
+        queryset = queryset.filter(created_at__date__lte=date_to)
+
+    if search_query:
+        # Ищем по ФИО инициатора или ФИО жертвы
+        queryset = queryset.filter(
+            Q(requestor__last_name__icontains=search_query)
+            | Q(requestor__first_name__icontains=search_query)
+            | Q(target_user__last_name__icontains=search_query)
+            | Q(target_user__first_name__icontains=search_query)
+        )
+
+    # 3. ПАГИНАЦИЯ (20 записей на страницу)
+    paginator = Paginator(queryset, 20)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
     context = {
-        "swaps": swaps,
+        "page_obj": page_obj,  # Передаем объект страницы, а не весь queryset
+        # Возвращаем параметры фильтра обратно в шаблон, чтобы заполнить инпуты
+        "filter_date_from": date_from,
+        "filter_date_to": date_to,
+        "search_query": search_query,
     }
     return render(request, "checklists/admin_swaps.html", context)
 

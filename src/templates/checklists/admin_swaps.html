@@ -2,78 +2,142 @@
 
 {% block title %}Журнал замен{% endblock %}
 
+{% block extra_css %}
+<!-- ... (остаются твои стили .btn-swap) ... -->
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>🔄 Журнал замен / переносов</h1>
-    <span class="badge bg-secondary">Всего записей: {{ swaps.count }}</span>
+    <span class="badge bg-secondary">Всего записей: {{ page_obj.paginator.count }}</span>
 </div>
 
-<div class="card shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th style="width: 15%">Дата запроса</th>
-                    <th style="width: 20%">Инициатор</th>
-                    <th style="width: 10%">Тип</th>
-                    <th style="width: 25%">Изменения дат</th>
-                    <th style="width: 30%">Причина</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in swaps %}
-                <tr>
-                    <!-- Дата создания записи -->
-                    <td class="text-muted small">
-                        {{ log.created_at|date:"d.m.Y H:i" }}
-                    </td>
+<!-- БЛОК ФИЛЬТРАЦИИ -->
+<div class="card shadow-sm mb-4 border-0 bg-light">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
 
-                    <!-- Инициатор (Кто запросил) -->
-                    <td>
-                        <div class="fw-bold">{{ log.requestor.get_full_name }}</div>
-                        <div class="small text-muted">{{ log.requestor.email }}</div>
-                    </td>
+            <!-- Поиск по ФИО -->
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Поиск (ФИО):</label>
+                <input type="text" name="q" class="form-control" placeholder="Кого ищем?" value="{{ search_query }}">
+            </div>
 
-                    <!-- Тип действия -->
-                    <td>
-                        {% if log.requestor.is_superuser %}
-                            <span class="badge bg-warning text-dark">Перенос</span>
-                        {% else %}
-                            <span class="badge bg-danger">Замена</span>
-                        {% endif %}
-                    </td>
+            <!-- Дата создания (от) -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Дата операции (С):</label>
+                <input type="date" name="date_from" class="form-control" value="{{ filter_date_from }}">
+            </div>
 
-                    <!-- Детали смены дат -->
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="text-decoration-line-through text-muted">{{ log.source_date|date:"d.m.Y" }}</span>
-                            <i class="bi bi-arrow-right text-primary"></i>
-                            <span class="fw-bold text-success">{{ log.target_date|date:"d.m.Y" }}</span>
-                        </div>
+            <!-- Дата создания (до) -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Дата операции (По):</label>
+                <input type="date" name="date_to" class="form-control" value="{{ filter_date_to }}">
+            </div>
 
-                        <!-- Если заменили на другого человека -->
-                        {% if log.requestor != log.target_user %}
-                            <div class="small text-muted mt-1">
-                                На кого: <strong>{{ log.target_user.get_full_name }}</strong>
-                            </div>
-                        {% endif %}
-                    </td>
-
-                    <!-- Причина -->
-                    <td>
-                        <em class="text-muted">"{{ log.reason }}"</em>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center py-5 text-muted">
-                        <h4 class="display-6">📭</h4>
-                        Записей о заменах пока нет.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <!-- Кнопки -->
+            <div class="col-md-2 text-end">
+                <a href="{% url 'admin_swaps' %}" class="btn btn-outline-secondary me-1">Сброс</a>
+                <button type="submit" class="btn btn-primary px-3">Найти</button>
+            </div>
+        </form>
     </div>
 </div>
+
+<!-- ТАБЛИЦА -->
+{% if page_obj %}
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <!-- ... заголовки (остаются твои) ... -->
+                    <tr>
+                        <th style="width: 15%">Дата запроса</th>
+                        <th style="width: 20%">Инициатор</th>
+                        <th style="width: 10%">Тип</th>
+                        <th style="width: 25%">Изменения дат</th>
+                        <th style="width: 30%">Причина</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in page_obj %}
+                    <tr>
+                        <!-- Дата создания записи -->
+                        <td class="text-muted small">
+                            {{ log.created_at|date:"d.m.Y H:i" }}
+                        </td>
+
+                        <!-- Инициатор -->
+                        <td>
+                            <div class="fw-bold">{{ log.requestor.get_full_name }}</div>
+                            <div class="small text-muted">{{ log.requestor.email }}</div>
+                        </td>
+
+                        <!-- Тип действия -->
+                        <td>
+                            {% if log.requestor.role == "admin" %}
+                                <span class="badge bg-warning text-dark">Перенос</span>
+                            {% else %}
+                                <span class="badge bg-danger">Замена</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Детали смены дат -->
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-decoration-line-through text-muted">{{ log.source_date|date:"d.m.Y" }}</span>
+                                <i class="bi bi-arrow-right text-primary"></i>
+                                <span class="fw-bold text-success">{{ log.target_date|date:"d.m.Y" }}</span>
+                            </div>
+
+                            <!-- Если инициатор (тот, кто запросил) и цель (на кого поменяли) - разные люди -->
+                            {% if log.requestor.id != log.target_user.id %}
+                                <div class="small text-muted mt-1">
+                                    На кого: <strong>{{ log.target_user.get_full_name }}</strong>
+                                </div>
+                            {% else %}
+                                <!-- Вдруг админ перенес сам на себя -->
+                                <div class="small text-muted mt-1">
+                                    На себя же
+                                </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Причина -->
+                        <td>
+                            <em class="text-muted">"{{ log.reason }}"</em>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ПАГИНАЦИЯ -->
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <span class="text-muted small">
+                Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}
+            </span>
+
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                        <!-- Формируем ссылку со всеми активными фильтрами -->
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}">Назад</a></li>
+                    {% endif %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}">Вперед</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+{% else %}
+    <!-- ЕСЛИ ЗАПИСЕЙ НЕТ ИЛИ ПОИСК НИЧЕГО НЕ ДАЛ -->
+    <div class="alert alert-light text-center py-5 shadow-sm">
+        <h4 class="display-6 text-muted">📭</h4>
+        <p class="text-muted">Записей о заменах не найдено.</p>
+    </div>
+{% endif %}
 {% endblock %}

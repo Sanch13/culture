@@ -21,7 +21,8 @@ class CustomUserAdmin(UserAdmin):
         "is_staff",
         "can_perform_inspections",
     )
-    ordering = ("email",)
+    ordering = ("last_name", "first_name")
+    search_fields = ("email", "first_name", "last_name", "middle_name", "phone")
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         (

@@ -85,8 +85,14 @@ def send_inspection_reminders():
     return f"Обработано {len(emails_to_send)} уведомлений."
 
 
-@shared_task
-def send_email(to: str, subject: str, body: str):
+@shared_task(
+    bind=True,
+    max_retries=12,  # Максимум 12 попыток
+    retry_backoff=300,  # Первая попытка через 5 минут (300 сек)
+    retry_backoff_max=7200,  # Максимальное ожидание 2 часа (7200 сек)
+    retry_jitter=True,  # Добавляет случайный шум (чтобы 100 писем не ударили в сервер в 1 миллисекунду, когда он поднимется)
+)
+def send_email(self, to: str, subject: str, body: str):
     try:
         message = EmailMessage()
         message["Subject"] = subject
@@ -96,13 +102,11 @@ def send_email(to: str, subject: str, body: str):
 
         send_message(message=message)
 
-        # logger.info("Email успешно отправлен админу")
-        # logger.info("---------End---------send_admin_email()---------")
         return f"Письмо успешно отправлено на {to}"
 
-    except Exception:
-        # logger.exception(f"Ошибка: {e}")
-        pass
+    except Exception as exc:
+        print(f"❌ Ошибка отправки на {to}. Сервер недоступен: {exc}")
+        raise self.retry(exc=exc)
 
 
 @shared_task
@@ -225,10 +229,6 @@ def send_admin_overdue_report():
     if not admin_emails:
         return "Ошибка: В системе нет активных администраторов с email."
 
-    # --- Подмена для теста (ПОТОМ УДАЛИТЬ) ---
-    admin_emails = ["a.zubchyk@miran-bel.com"]
-    # ----------------------------------------
-
     success_count = 0
     subject = (
         f"🚨 ВНИМАНИЕ: Незавершенные проверки на {timezone.now().strftime('%d.%m.%Y')}"
@@ -237,7 +237,7 @@ def send_admin_overdue_report():
     # Отправим каждому отдельно, чтобы у всех в ящике было красиво:
     for email in admin_emails:
         try:
-            send_email(to=email, subject=subject, body=report_body)
+            send_email.delay(to=email, subject=subject, body=report_body)
             success_count += 1
             print(f"📧 [ADMIN OVERDUE] Sent to {email}")
         except Exception as e:
