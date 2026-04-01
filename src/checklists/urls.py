@@ -46,6 +46,11 @@ urlpatterns = [
         views.management_inspection_detail,
         name="management_report_detail",
     ),
+    path(
+        "management/analytics/",
+        views.management_analytics_dashboard,
+        name="management_analytics",
+    ),
     # API
     path(
         "api/upload-photo/<int:item_id>/",

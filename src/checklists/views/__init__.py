@@ -19,6 +19,7 @@ from checklists.views.employee_cabinet import (
     auto_swap_shift,
     management_reports_list,
     management_inspection_detail,
+    management_analytics_dashboard,
 )
 from checklists.views.api import (
     upload_photo_ajax,
@@ -49,6 +50,7 @@ __all__ = (
     "auto_swap_shift",
     "management_reports_list",
     "management_inspection_detail",
+    "management_analytics_dashboard",
     "upload_photo_ajax",
     "delete_photo_ajax",
     "save_comment_ajax",

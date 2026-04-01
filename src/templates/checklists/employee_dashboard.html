@@ -116,10 +116,10 @@
         <!-- СЦЕНАРИЙ: БУДУЩЕЕ (Сегодня пусто, но на этой неделе есть проверка) -->
         <div class="alert text-center p-5 border shadow-sm mb-5 bg-white"> <!-- Заменил alert-primary на bg-white для чистоты -->
 
-            <h3 class="text-primary mb-4">Сегодня заданий нет</h3>
+            <h3 class="text-miran mb-4">Сегодня заданий нет</h3>
 
             <div class="mb-4">
-                <p class="text-muted mb-1">Ближайшая смена:</p>
+                <p class="text-muted mb-1">Ближайшая проверка:</p>
                 <p class="fs-4 fw-bold text-dark mb-0">{{ future_tasks.0.date|date:"l, d E" }}</p> <!-- Берем дату из первого элемента -->
                 <p class="text-muted small">(Через {{ days_until }} дн.)</p>
             </div>

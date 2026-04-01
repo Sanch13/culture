@@ -7,19 +7,20 @@ from django.contrib import messages
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
 
-from checklists.context_processors import BOSS_ROLES
 from checklists.models import (
     ChecklistTemplate,
     Inspection,
     ViolationPhoto,
     Schedule,
 )
-from checklists.decorators import employee_required
+from checklists.decorators import employee_required, management_required
 from checklists.services import (
     create_inspection_from_template,
     perform_auto_swap,
     apply_inspection_filters_and_paginate,
     is_global_viewer,
+    analytics_dashboard,
+    get_item_history_chain,
 )
 from checklists.tasks import (
     notify_user_about_swap,
@@ -332,14 +333,9 @@ def auto_swap_shift(request, schedule_id):
     return redirect("employee_dashboard")
 
 
-@employee_required
+@management_required
 def management_reports_list(request):
     user = request.user
-
-    # Если не босс — выгоняем
-    if user.role not in BOSS_ROLES and not user.is_staff:
-        messages.error(request, "Доступ запрещен.")
-        return redirect("employee_dashboard")
 
     # --- 1. БАЗОВЫЙ ЗАПРОС (ACCESS CONTROL) ---
     queryset = (
@@ -365,16 +361,9 @@ def management_reports_list(request):
     return render(request, "checklists/management_history.html", context)
 
 
-@employee_required
+@management_required
 def management_inspection_detail(request, inspection_id):
     user = request.user
-
-    # Проверка базовых прав
-    if user.role not in BOSS_ROLES and not user.is_staff:
-        messages.error(request, "Доступ запрещен.")
-        return redirect("employee_dashboard")
-
-    # Ищем отчет
     inspection = get_object_or_404(Inspection, id=inspection_id)
 
     # --- ЛОГИКА ДОСТУПА ---
@@ -395,9 +384,28 @@ def management_inspection_detail(request, inspection_id):
             return redirect("management_reports")
 
     # --- ФОРМИРОВАНИЕ ДАННЫХ ДЛЯ ОТОБРАЖЕНИЯ ---
-    items = inspection.items.prefetch_related("photos").order_by(
-        "section_name", "criteria_order"
+    # 1. Загружаем пункты и сортируем правильно (по порядку раздела и пункта)
+    items = list(
+        inspection.items.select_related("criteria_origin__section")
+        .prefetch_related("photos")
+        .all()
     )
+
+    items.sort(
+        key=lambda i: (
+            i.criteria_origin.section.order
+            if i.criteria_origin and i.criteria_origin.section
+            else 9999,
+            i.criteria_order,
+        )
+    )
+
+    # 2. ПОДТЯГИВАЕМ ИСТОРИЮ (НОВОЕ)
+    for item in items:
+        if item.is_repeated_violation:
+            item.history_chain = get_item_history_chain(item, max_depth=2)
+
+    # 3. Группировка
     sections_data = {}
     for item in items:
         sec_name = item.section_name
@@ -408,3 +416,19 @@ def management_inspection_detail(request, inspection_id):
     context = {"inspection": inspection, "sections_data": sections_data}
 
     return render(request, "checklists/management_readonly.html", context)
+
+
+@management_required
+def management_analytics_dashboard(request):
+    """
+    Сводная таблица (Pivot) за выбранный месяц.
+    Учитывает праздники РБ и генерирует года динамически.
+    """
+    # 1. ГОДА И МЕСЯЦЫ
+    today = timezone.now().date()
+    year = int(request.GET.get("year", today.year))
+    month = int(request.GET.get("month", today.month))
+
+    context = analytics_dashboard(today, year, month)
+
+    return render(request, "checklists/management_analytics.html", context)

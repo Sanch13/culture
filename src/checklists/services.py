@@ -1,3 +1,4 @@
+import calendar
 import datetime
 from itertools import groupby
 
@@ -1000,3 +1001,192 @@ def prepare_overdue_notifications():
     body_lines.append("Пожалуйста, свяжитесь с ответственными сотрудниками.")
 
     return "\n".join(body_lines)
+
+
+def analytics_dashboard(today, year, month):
+    # Динамический список лет (например, от 2024 до текущего + 1)
+    years_choices = list(range(2025, today.year + 2))
+
+    # 2. РАБОЧИЕ ДНИ МЕСЯЦА (С учетом праздников РБ)
+    # by_holidays = holidays.BY(years=year)  # Загружаем праздники за выбранный год
+
+    _, num_days = calendar.monthrange(year, month)
+
+    work_days = []
+    for day in range(1, num_days + 1):
+        current_date = datetime.date(year, month, day)
+
+        # # Проверяем: если не выходной (0-4 это Пн-Пт) И не праздник РБ
+        # if current_date.weekday() < 5 and current_date not in by_holidays:
+        #     work_days.append(current_date)
+
+        # --- ИСПОЛЬЗУЕМ НАШУ УМНУЮ ФУНКЦИЮ ---
+        if is_working_day(current_date):
+            work_days.append(current_date)
+
+    # 3. ЗАГРУЗКА ДАННЫХ ИЗ БД
+    loc_scores = LocationDailyScore.objects.filter(date__year=year, date__month=month)
+    loc_map = {(s.location_id, s.date): s.score for s in loc_scores}
+
+    inspections = Inspection.objects.filter(
+        date_check__year=year, date_check__month=month, is_completed=True
+    ).select_related("template", "template__location")
+
+    insp_map = {}
+    for insp in inspections:
+        key = (insp.template_id, insp.date_check)
+        if key not in insp_map:
+            insp_map[key] = []
+        if insp.final_score is not None:
+            insp_map[key].append(insp.final_score)
+
+    for key, scores in insp_map.items():
+        insp_map[key] = sum(scores) / len(scores) if scores else None
+
+    # Глобальный B1
+    b1_scores = InspectionSectionScore.objects.filter(
+        date_check__year=year, date_check__month=month, section_type="B1"
+    )
+    b1_map = {}
+    for b1 in b1_scores:
+        day = b1.date_check
+        if day not in b1_map:
+            b1_map[day] = []
+        if b1.score is not None:
+            b1_map[day].append(b1.score)
+
+    for day, scores in b1_map.items():
+        if scores:
+            if min(scores) <= 3.01:
+                b1_map[day] = min(scores)
+            else:
+                b1_map[day] = sum(scores) / len(scores)
+        else:
+            b1_map[day] = None
+
+    # 4. СБОРКА ТАБЛИЦЫ
+    table_rows = []
+    locations = Location.objects.all().order_by("name")
+
+    for loc in locations:
+        # Участок
+        loc_row = {
+            "is_location": True,
+            "title": loc.name,
+            "scores": [],
+            "avg_month": None,
+        }
+        loc_sum = 0
+        loc_count = 0
+        for day in work_days:
+            score = loc_map.get((loc.id, day))
+            loc_row["scores"].append(score)
+            if score is not None:
+                loc_sum += score
+                loc_count += 1
+        if loc_count > 0:
+            loc_row["avg_month"] = round(loc_sum / loc_count, 2)
+        table_rows.append(loc_row)
+
+        # Отчеты
+        templates = loc.templates.all().order_by("name")
+        for tmpl in templates:
+            tmpl_row = {
+                "is_location": False,
+                "title": tmpl.name,
+                "scores": [],
+                "avg_month": None,
+            }
+            tmpl_sum = 0
+            tmpl_count = 0
+            for day in work_days:
+                score = insp_map.get((tmpl.id, day))
+                tmpl_row["scores"].append(score)
+                if score is not None:
+                    tmpl_sum += score
+                    tmpl_count += 1
+            if tmpl_count > 0:
+                tmpl_row["avg_month"] = round(tmpl_sum / tmpl_count, 2)
+            table_rows.append(tmpl_row)
+
+    # Состояние B1
+    b1_row = {
+        "is_location": True,
+        "title": "Состояние оборудования на участках (B1)",
+        "scores": [],
+        "avg_month": None,
+    }
+    b1_sum = 0
+    b1_count = 0
+    for day in work_days:
+        score = b1_map.get(day)
+        b1_row["scores"].append(score)
+        if score is not None:
+            b1_sum += score
+            b1_count += 1
+    if b1_count > 0:
+        b1_row["avg_month"] = round(b1_sum / b1_count, 2)
+    table_rows.append(b1_row)
+
+    # 5. ФОРМИРУЕМ МЕСЯЦЫ
+    months_choices = [
+        (1, "Январь"),
+        (2, "Февраль"),
+        (3, "Март"),
+        (4, "Апрель"),
+        (5, "Май"),
+        (6, "Июнь"),
+        (7, "Июль"),
+        (8, "Август"),
+        (9, "Сентябрь"),
+        (10, "Октябрь"),
+        (11, "Ноябрь"),
+        (12, "Декабрь"),
+    ]
+
+    context = {
+        "table_rows": table_rows,
+        "work_days": work_days,
+        "current_year": year,
+        "current_month": month,
+        "months_choices": months_choices,
+        "years_choices": years_choices,  # Передаем года
+    }
+
+    return context
+
+
+def get_item_history_chain(item, max_depth=2):
+    """
+    Раскручивает цепочку прошлых нарушений (Вчера, Позавчера...).
+    Возвращает список объектов InspectionItem.
+    """
+    history_chain = []
+    current_item = item
+
+    # Если текущий пункт - это НЕ повторное нарушение, истории нет
+    if not current_item.is_repeated_violation or current_item.is_compliant:
+        return history_chain
+
+    # Идем в прошлое на max_depth шагов
+    for _ in range(max_depth):
+        past_item = (
+            InspectionItem.objects.filter(
+                inspection__template=current_item.inspection.template,
+                inspection__is_completed=True,
+                inspection__date_check__lt=current_item.inspection.date_check,
+                criteria_origin_id=current_item.criteria_origin_id,
+                is_compliant=False,  # Берем только нарушения
+            )
+            .prefetch_related("photos")
+            .order_by("-inspection__date_check")
+            .first()
+        )
+
+        if past_item:
+            history_chain.append(past_item)
+            current_item = past_item  # Теперь ищем "вчера" для этого "вчера"
+        else:
+            break  # Цепочка прервалась (или не было отчета, или было ОК)
+
+    return history_chain

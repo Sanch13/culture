@@ -52,6 +52,15 @@
                         <i class="bi bi-bar-chart-line me-1"></i> Отчеты участка
                     </a>
                 </li>
+
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'management_analytics' %}active{% endif %}"
+                       href="{% url 'management_analytics' %}">
+                        Аналитика
+                    </a>
+                </li>
+
+
                 {% endif %}
 
             </ul>

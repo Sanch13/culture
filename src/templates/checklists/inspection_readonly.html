@@ -1,12 +1,22 @@
-{% extends 'base_admin.html' %}
+{% extends 'base_admin.html' %} <!-- Проверь путь! -->
 
 {% block title %}Отчет #{{ inspection.id }}{% endblock %}
+
+{% block extra_css %}
+    <!-- Стили Fancybox -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
+    <style>
+        .fancybox__container { --f-bg: rgba(0, 0, 0, 0.85); }
+        .history-card { border-left: 4px solid #ffc107; background-color: #fffdf5; }
+        .history-date { font-size: 0.8rem; font-weight: bold; color: #856404; }
+    </style>
+{% endblock %}
 
 {% block content %}
 <div class="container pb-5" style="max-width: 900px;">
 
-    <!-- Шапка отчета -->
-    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+    <!-- ... (Шапка отчета остается без изменений) ... -->
+        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <div>
             <h6 class="text-muted text-uppercase">Отчет о проверке #{{ inspection.id }}</h6>
             <h2 class="mb-2">{{ inspection.template.name }}</h2>
@@ -40,30 +50,64 @@
                             {% else %}
                                 <i class="bi bi-x-circle-fill text-danger"></i>
                             {% endif %}
+
                         </div>
 
                         <!-- Контент -->
                         <div class="flex-grow-1">
-                            <div class="fw-medium mb-1">{{ item.criteria_text }}</div>
+                            <div class="fw-medium mb-2">{{ item.criteria_text }}</div>
 
-                            <!-- Если есть комментарий -->
+                            <!-- === БЛОК ИСТОРИИ (ВЧЕРА И ПОЗАВЧЕРА) === -->
+                            {% if item.history_chain %}
+                                <div class="mb-3">
+                                    {% for past_item in item.history_chain %}
+                                        <!-- Карточка старого нарушения -->
+                                        <div class="history-card p-2 mb-2 shadow-sm rounded border">
+                                            <div class="history-date mb-1">
+                                                Было нарушение: {{ past_item.inspection.date_check|date:"d.m.Y" }}
+                                            </div>
+
+                                            {% if past_item.comment %}
+                                                <div class="small text-muted fst-italic mb-1">
+                                                    "{{ past_item.comment }}"
+                                                </div>
+                                            {% endif %}
+
+                                            {% if past_item.photos.all %}
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    {% for photo in past_item.photos.all %}
+                                                        <!-- Галерея Fancybox (группируем по ID прошлого пункта) -->
+                                                        <a href="{{ photo.image.url }}" data-fancybox="history-{{ past_item.id }}" data-caption="Нарушение {{ past_item.inspection.date_check|date:'d.m.Y' }}">
+                                                            <img src="{{ photo.image.url }}" class="rounded border bg-white" style="width: 60px; height: 60px; object-fit: cover;">
+                                                        </a>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <!-- ======================================= -->
+
+                            <!-- ТЕКУЩИЙ КОММЕНТАРИЙ -->
                             {% if item.comment %}
-                                <div class="alert alert-warning py-1 px-2 d-inline-block mb-1 small">
-                                    💬 {{ item.comment }}
+                                <div class="alert alert-warning py-1 px-2 d-inline-block mb-2 small w-100">
+                                    <strong>Сегодня:</strong> {{ item.comment }}
                                 </div>
                             {% endif %}
 
-                            <!-- Фотографии -->
+                            <!-- ТЕКУЩИЕ ФОТОГРАФИИ -->
                             {% if item.photos.all %}
                                 <div class="d-flex flex-wrap gap-2 mt-2">
                                     {% for photo in item.photos.all %}
-                                        <a href="{{ photo.image.url }}" target="_blank">
-                                            <img src="{{ photo.image.url }}" class="rounded border bg-white"
-                                                 style="width: 100px; height: 100px; object-fit: cover;">
+                                        <!-- Галерея Fancybox (группируем по ID текущего пункта) -->
+                                        <a href="{{ photo.image.url }}" data-fancybox="gallery-{{ item.id }}" data-caption="Текущее нарушение">
+                                            <img src="{{ photo.image.url }}" class="rounded border bg-white shadow-sm" style="width: 100px; height: 100px; object-fit: cover;">
                                         </a>
                                     {% endfor %}
                                 </div>
                             {% endif %}
+
                         </div>
 
                     </div>
@@ -73,8 +117,32 @@
     {% endfor %}
 
     <div class="text-center text-muted mt-5">
-        Документ сформирован автоматически системой CheckSystem.
+        Документ сформирован автоматически системой.
     </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Подключаем Fancybox JS -->
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
+<script>
+    // Инициализация Fancybox
+    Fancybox.bind("[data-fancybox]", {
+        loop: true,
+        Toolbar: {
+            display: {
+                left: ["infobar"],
+                middle: [
+                    "zoomIn",
+                    "zoomOut",
+                    "toggle1to1",
+                    "rotateCCW",
+                    "rotateCW",
+                ],
+                right: ["slideshow", "thumbs", "close"],
+            },
+        },
+    });
+</script>
 {% endblock %}
