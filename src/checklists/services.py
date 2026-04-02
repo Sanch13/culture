@@ -146,7 +146,7 @@ def create_inspection_from_template(template, user, date, location_snapshot):
         return inspection
 
 
-def perform_auto_swap(schedule_item, reason):
+def perform_auto_swap(schedule_item, reason_type, reason_text):
     """
     Групповая автозамена.
     Меняет ВСЕ смены инициатора на эту дату на ВСЕ смены жертвы на будущую дату.
@@ -217,17 +217,31 @@ def perform_auto_swap(schedule_item, reason):
             t.save()
 
         # 6. Пишем лог (ОДИН лог на весь обмен, не нужно плодить дубли)
+        reason_dict = {
+            "vacation": "Трудовой отпуск",
+            "trip": "Командировка",
+            "sick": "Больничный",
+            "other": "Другое",
+        }
+        human_reason = reason_dict.get(reason_type, "Неизвестно")
+
         SwapLog.objects.create(
             requestor=current_user,
             target_user=target_user,
             source_date=current_date,
             target_date=target_date,
-            reason=reason,
+            reason_type=reason_type,
+            reason=reason_text,
         )
+
+    # Формируем красивое инфо для админа
+    final_reason_str = f"{human_reason}"
+    if reason_text:
+        final_reason_str += f" ({reason_text})"
 
     info_about_change = (
         f"Дата: {current_date}.\nПроверяющий {current_user.last_name} {current_user.first_name} "
-        f"заменился на {target_user.last_name} {target_user.first_name}.\nПричина: {reason}"
+        f"заменился на {target_user.last_name} {target_user.first_name}.\nПричина: {final_reason_str}"
     )
 
     return (

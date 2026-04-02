@@ -151,6 +151,7 @@ def inspection_form_view(request, inspection_id):
         if action == "complete":
             # Тут можно добавить валидацию: все ли поля заполнены?
             inspection.is_completed = True
+            inspection.completed_at = timezone.now()
             inspection.save()
 
             task_calculate_score.delay(inspection.id)
@@ -302,18 +303,28 @@ def auto_swap_shift(request, schedule_id):
         messages.error(request, "Нельзя отказаться от начатого задания.")
         return redirect("employee_dashboard")
 
-    # Получаем причину из формы
-    reason = request.POST.get("reason", "").strip()
+    # Получаем новые данные
+    reason_type = request.POST.get("reason_type")
+    reason_text = request.POST.get("reason", "").strip()
 
-    if not reason:
-        messages.error(request, "Вы обязаны указать причину отказа!")
+    # Валидация на сервере (защита от умников)
+    if not reason_type:
+        messages.error(request, "Выберите тип причины из списка.")
+        return redirect("employee_dashboard")
+
+    if reason_type == "other" and not reason_text:
+        messages.error(
+            request, "При выборе 'Другая причина' необходимо написать комментарий!"
+        )
         return redirect("employee_dashboard")
 
     # Сохраняем дату для уведомлений ДО того, как объект изменится
     current_date_str = schedule_item.date.strftime("%Y-%m-%d")
 
     # Вызываем сервис
-    success, message, info_about_change = perform_auto_swap(schedule_item, reason)
+    success, message, info_about_change = perform_auto_swap(
+        schedule_item, reason_type, reason_text
+    )
 
     if success:
         messages.success(request, message)

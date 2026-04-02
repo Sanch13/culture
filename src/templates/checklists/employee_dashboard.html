@@ -10,12 +10,11 @@
     {% if today_tasks %}
         <!-- СЦЕНАРИЙ: СЕГОДНЯ ЕСТЬ РАБОТА -->
         <h4 class="mb-3 text-secondary d-flex align-items-center">
-            Задания на сегодня
+
             <!-- Если остались задачи -> Показываем красную цифру, иначе зеленую 0 -->
             {% if remaining_tasks_count > 0 %}
-                <span class="ms-2">{{ remaining_tasks_count }} шт.</span>
+                <span class="ms-2">Задания на сегодня {{ remaining_tasks_count }} шт.</span>
             {% else %}
-                <span class="ms-2">0 шт.</span>
             {% endif %}
         </h4>
 
@@ -71,8 +70,9 @@
             <div class="modal fade" id="swapModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
+
                         <div class="modal-header bg-danger text-white">
-                            <h5 class="modal-title">Не могу провести аудит</h5>
+                            <h5 class="modal-title">Не могу провести проверку</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
 
@@ -80,6 +80,8 @@
                         <form action="{% url 'auto_swap_shift' today_tasks.0.id %}" method="post">
                             {% csrf_token %}
                             <div class="modal-body text-start">
+
+                                <!-- Предупреждение о количестве задач -->
                                 {% if today_tasks|length > 1 %}
                                     <div class="alert alert-warning small">
                                         <i class="bi bi-exclamation-triangle-fill"></i>
@@ -89,14 +91,34 @@
                                     <p>Вы собираетесь перенести эту проверку на другую дату.</p>
                                 {% endif %}
 
-                                <label class="form-label fw-bold">Причина замены (Обязательно):</label>
-                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Больничный, отпуск, командировка..."></textarea>
+                                <!-- НОВЫЙ БЛОК: Выбор причины -->
+                                <div class="mb-3">
+                                    <label for="reasonTypeSelect" class="form-label fw-bold">Укажите причину (Обязательно):</label>
+                                    <!-- onchange вызывает нашу JS функцию -->
+                                    <select class="form-select" name="reason_type" id="reasonTypeSelect" required onchange="toggleReasonText(this)">
+                                        <option value="" disabled selected>Выберите из списка...</option>
+                                        <option value="vacation">Трудовой отпуск</option>
+                                        <option value="trip">Командировка</option>
+                                        <option value="sick">Больничный лист</option>
+                                        <option value="other">Другая причина (указать)</option>
+                                    </select>
+                                </div>
+
+                                <!-- НОВЫЙ БЛОК: Текстовое поле (Скрыто по умолчанию) -->
+                                <div class="mb-3" id="reasonTextContainer" style="display: none;">
+                                    <label for="reasonText" class="form-label text-muted small mb-1">Опишите причину:</label>
+                                    <!-- Атрибут required будет добавляться и удаляться через JS -->
+                                    <textarea class="form-control" name="reason" id="reasonText" rows="2" placeholder="Укажите подробности..."></textarea>
+                                </div>
+
                             </div>
+
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                                 <button type="submit" class="btn btn-danger">Подтвердить замену</button>
                             </div>
                         </form>
+
                     </div>
                 </div>
             </div>
@@ -146,7 +168,7 @@
             <div class="w-100 mt-4 mx-auto" style="max-width: 400px;">
                 <button type="button" class="btn btn-outline-danger btn-lg w-100 fw-bold shadow-sm"
                         data-bs-toggle="modal" data-bs-target="#swapFutureModal">
-                    Не смогу выполнить (Автозамена)
+                    Не могу выполнить проверку (Автозамена)
                 </button>
             </div>
 
@@ -154,8 +176,9 @@
             <div class="modal fade" id="swapFutureModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
+
                         <div class="modal-header bg-danger text-white">
-                            <h5 class="modal-title">Не могу провести аудит</h5>
+                            <h5 class="modal-title">Не могу провести проверку</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
 
@@ -163,6 +186,7 @@
                         <form action="{% url 'auto_swap_shift' future_tasks.0.id %}" method="post">
                             {% csrf_token %}
                             <div class="modal-body text-start text-dark">
+
                                 {% if future_tasks|length > 1 %}
                                     <div class="alert alert-warning small">
                                         <i class="bi bi-exclamation-triangle-fill"></i>
@@ -172,14 +196,34 @@
                                     <p>Вы собираетесь перенести проверку, назначенную на <strong>{{ future_tasks.0.date|date:"l, d.m.Y" }}</strong>.</p>
                                 {% endif %}
 
-                                <label class="form-label fw-bold">Причина замены (Обязательно):</label>
-                                <textarea class="form-control" name="reason" rows="3" required placeholder="Например: Больничный, отпуск, командировка..."></textarea>
+                                <!-- Выбор причины (Обрати внимание на 'this' и уникальные ID) -->
+                                <div class="mb-3">
+                                    <label for="reasonTypeSelectFuture" class="form-label fw-bold">Укажите причину (Обязательно):</label>
+                                    <select class="form-select" name="reason_type" id="reasonTypeSelectFuture" required
+                                            onchange="toggleReasonTextFuture(this)">
+                                        <option value="" disabled selected>Выберите из списка...</option>
+                                        <option value="vacation">Трудовой отпуск</option>
+                                        <option value="trip">Командировка</option>
+                                        <option value="sick">Больничный лист</option>
+                                        <option value="other">Другая причина (указать)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Текстовое поле (Скрыто по умолчанию) -->
+                                <div class="mb-3" id="reasonTextContainerFuture" style="display: none;">
+                                    <label for="reasonTextFuture" class="form-label text-muted small mb-1">Опишите причину:</label>
+                                    <textarea class="form-control" name="reason" id="reasonTextFuture" rows="2"
+                                              placeholder="Укажите подробности..."></textarea>
+                                </div>
+
                             </div>
+
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                                 <button type="submit" class="btn btn-danger">Подтвердить замену</button>
                             </div>
                         </form>
+
                     </div>
                 </div>
             </div>
@@ -209,15 +253,61 @@
                             {{ inspection.date_check|date:"d.m.Y" }} | {{ inspection.location_snapshot }}
                         </div>
                     </div>
-                    {% if inspection.is_completed %}
-                        <span class="badge bg-success rounded-pill">Завершен</span>
-                    {% else %}
-                        <span class="badge bg-warning text-dark rounded-pill">Черновик</span>
-                    {% endif %}
+
+                    <!-- БЛОК СТАТУСА (С ИЗМЕНЕНИЯМИ) -->
+                    <div class="text-end">
+                        {% if inspection.is_completed %}
+                            <span class="badge bg-success rounded-pill">Завершен</span>
+
+                            <!-- НОВОЕ: Показываем дату и время сдачи (если они есть) -->
+                            {% if inspection.completed_at %}
+                                <div class="small text-muted pt-1" style="font-size: 0.9rem;">
+                                    Сдан: {{ inspection.completed_at|date:"d.m.Y H:i" }}
+                                </div>
+                            {% endif %}
+
+                        {% else %}
+                            <span class="badge bg-warning text-dark rounded-pill">В процессе</span>
+                        {% endif %}
+                    </div>
+
+
                 </a>
             {% empty %}
                 <div class="p-4 text-center text-muted">Вы еще не проводили проверок.</div>
             {% endfor %}
         </div>
     </div>
+
+    <script>
+        // Функция для модалки "СЕГОДНЯ"
+        function toggleReasonText(selectElement) {
+            const textContainer = document.getElementById('reasonTextContainer');
+            const textArea = document.getElementById('reasonText');
+
+            if (selectElement.value === 'other') {
+                textContainer.style.display = 'block';
+                textArea.required = true;
+            } else {
+                textContainer.style.display = 'none';
+                textArea.required = false;
+                textArea.value = '';
+            }
+        }
+
+        // Функция для модалки "БУДУЩЕЕ"
+        function toggleReasonTextFuture(selectElement) {
+            const textContainer = document.getElementById('reasonTextContainerFuture');
+            const textArea = document.getElementById('reasonTextFuture');
+
+            if (selectElement.value === 'other') {
+                textContainer.style.display = 'block';
+                textArea.required = true;
+            } else {
+                textContainer.style.display = 'none';
+                textArea.required = false;
+                textArea.value = '';
+            }
+        }
+    </script>
 {% endblock %}

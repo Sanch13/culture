@@ -196,6 +196,9 @@ class Inspection(models.Model):
     )
     date_check = models.DateField("Дата проверки", default=timezone.now)
     created_at = models.DateTimeField("Дата создания записи", auto_now_add=True)
+    completed_at = models.DateTimeField(
+        "Дата и время сдачи отчета", null=True, blank=True
+    )
 
     # Snapshot: фиксируем название участка текстом на момент проверки
     location_snapshot = models.CharField("Участок (архив)", max_length=300)
@@ -363,6 +366,23 @@ class SwapLog(models.Model):
     Нужна для администратора, чтобы видеть 'прогульщиков'.
     """
 
+    # ТИПЫ ПРИЧИН
+    REASON_VACATION = "vacation"
+    REASON_TRIP = "trip"
+    REASON_SICK = "sick"
+    REASON_OTHER = "other"
+
+    REASON_CHOICES = [
+        (REASON_VACATION, "Трудовой отпуск"),
+        (REASON_TRIP, "Командировка"),
+        (REASON_SICK, "Больничный лист"),
+        (REASON_OTHER, "Другая причина"),
+    ]
+    # НОВОЕ ПОЛЕ: Тип причины
+    reason_type = models.CharField(
+        "Тип причины", max_length=20, choices=REASON_CHOICES, default=REASON_OTHER
+    )
+
     # Кто запросил замену (Инициатор)
     requestor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -386,7 +406,7 @@ class SwapLog(models.Model):
     target_date = models.DateField("Дата (стала)")
 
     # Причина (обязательно)
-    reason = models.TextField("Причина замены")
+    reason = models.TextField("Причина замены", blank=True, null=True)
 
     class Meta:
         verbose_name = "История замен"

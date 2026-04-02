@@ -75,7 +75,8 @@
         }
 
         body {
-            padding-bottom: 80px;
+            padding-bottom: 40px;
+            padding-top: 10px;
         }
 
         /* Стиль для заблокированных элементов */
@@ -103,7 +104,7 @@
         }
 
 
-        /* Увеличенный чекбокс "Повторное нарушение" */
+        /* Увеличенный чекбокс "Повторное несоответствие" */
         .custom-checkbox-lg {
             width: 1.2em; /* Увеличиваем размер (стандарт 1em) */
             height: 1.2em;
@@ -214,7 +215,7 @@
                                     style="background-color: #f8d7da; border-color: #f5c6cb; color: #721c24;">
                                 <span>
                                     <i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>
-                                    <strong>Внимание!</strong> Нарушение ({{ item.history.inspection.date_check|date:"d.m.Y" }})
+                                    <strong>Внимание!</strong> Несоответствие ({{ item.history.inspection.date_check|date:"d.m.Y" }})
                                 </span>
                                 <i class="bi bi-chevron-down transition-transform"></i>
                             </button>
@@ -260,14 +261,14 @@
                                        id="radio_ok_{{ item.id }}" value="true"
                                        {% if item.is_compliant %}checked{% endif %}
                                        onchange="handleStatusChange({{ item.id }}, 'true')">
-                                <label for="radio_ok_{{ item.id }}" class="lbl-yes" id="label_ok_{{ item.id }}">✔ ОК</label>
+                                <label for="radio_ok_{{ item.id }}" class="lbl-yes" id="label_ok_{{ item.id }}">ОК</label>
 
-                                <!-- Кнопка Нарушение -->
+                                <!-- Кнопка Несоответствие -->
                                 <input type="radio" name="compliant_{{ item.id }}"
                                        id="radio_bad_{{ item.id }}" value="false"
                                        {% if not item.is_compliant %}checked{% endif %}
                                        onchange="handleStatusChange({{ item.id }}, 'false')">
-                                <label for="radio_bad_{{ item.id }}" class="lbl-no">✖ Нарушение</label>
+                                <label for="radio_bad_{{ item.id }}" class="lbl-no">Несоответствие</label>
 
                             </div>
                             <!-- НОВЫЙ БЛОК: ЧЕКБОКС ПОВТОРНОГО НАРУШЕНИЯ -->
@@ -283,7 +284,7 @@
                                            onchange="saveRepeatedAjax({{ item.id }}, this.checked); handleInteraction({{ item.id }});">
 
                                     <label class="form-check-label fw-bold text-danger label-repeated-lg" for="check_repeated_{{ item.id }}">
-                                        <i class="bi bi-exclamation-triangle"></i> Повторное нарушение
+                                        <i class="bi bi-exclamation-triangle"></i> Повторное несоответствие
                                     </label>
                                 </div>
                             </div>
@@ -297,7 +298,7 @@
                             <textarea name="comment_{{ item.id }}"
                                       id="comment_{{ item.id }}"
                                       class="form-control mb-2" rows="2"
-                                      placeholder="Опишите нарушение..."
+                                      placeholder="Опишите несоответствие..."
                                       oninput="handleInteraction({{ item.id }})"
                                       onblur="saveCommentAjax(this)">{{ item.comment|default:'' }}</textarea>
 
@@ -329,7 +330,7 @@
                                 <div id="photo_btn_{{ item.id }}" class="d-flex gap-2">
 
                                     <!-- КНОПКА 1: ГАЛЕРЕЯ (Множественный выбор) -->
-                                    <label class="btn btn-sm btn-outline-primary">
+                                    <label class="btn btn-sm btn-outline-primary" id="btn_gallery_{{ item.id }}">
                                         <i class="bi bi-folder2-open"></i> Галерея
                                         <!-- multiple позволяет выбрать несколько фото сразу -->
                                         <input type="file" style="display: none;" multiple accept="image/*"
@@ -337,12 +338,18 @@
                                     </label>
 
                                     <!-- КНОПКА 2: КАМЕРА (Прямой доступ) -->
-                                    <label class="btn btn-sm btn-outline-danger">
+                                    <label class="btn btn-sm btn-outline-danger" id="btn_camera_{{ item.id }}">
                                         <i class="bi bi-camera-fill"></i> Снять
                                         <!-- capture="environment" открывает заднюю камеру. multiple здесь обычно не работает на телефонах -->
                                         <input type="file" style="display: none;" accept="image/*" capture="environment"
                                                onchange="uploadPhoto(this, {{ item.id }})">
                                     </label>
+
+                                    <!-- НОВОЕ: СПИННЕР ЗАГРУЗКИ (Скрыт по умолчанию) -->
+                                    <div id="loading-spinner-{{ item.id }}" style="display: none;" class="text-miran small fw-bold">
+                                        <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                                        Загрузка...
+                                    </div>
 
                                 </div>
 
@@ -365,6 +372,8 @@
         </div>
 
     </form>
+
+    {% include 'checklists/includes/scroll_to_top.html' %}
 </div>
 
 <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ -->
@@ -391,10 +400,10 @@
 
                 <!-- СПИННЕР ЗАГРУЗКИ (Скрыт по умолчанию) -->
                 <div id="completeModalLoading" style="display: none;">
-                    <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">
+                    <div class="spinner-border text-miran" role="status" style="width: 3rem; height: 3rem;">
                         <span class="visually-hidden">Загрузка...</span>
                     </div>
-                    <h4 class="mt-3 text-success">Отправка отчета...</h4>
+                    <h4 class="mt-3 text-miran">Отправка отчета...</h4>
                     <p class="text-muted small">Пожалуйста, подождите, не закрывайте страницу.</p>
                 </div>
             </div>
@@ -423,7 +432,7 @@
                 </div>
                 <h4 class="mb-3">Ошибка заполнения!</h4>
                 <p class="text-muted">
-                    Вы отметили пункт как <strong>"Нарушение"</strong> (или прикрепили фото).
+                    Вы отметили пункт как <strong>"Несоответствие"</strong> (или прикрепили фото).
                 </p>
                 <p class="fw-bold text-danger">
                     Обязательно добавьте текстовый комментарий, описывающий проблему.
@@ -511,7 +520,7 @@
     // ЛОГИКА СТАТУСОВ И ВЗАИМОДЕЙСТВИЯ
     // ============================================================
 
-    // 1. Изменение статуса при клике на кнопки (ОК / Нарушение)
+    // 1. Изменение статуса при клике на кнопки (ОК / Несоответствие)
     function handleStatusChange(itemId, statusValue) {
         saveStatusAjax(itemId, statusValue);
         updateVisualState(itemId);
@@ -533,7 +542,7 @@
 
         // Логика переключения: Если есть текст ИЛИ фото ИЛИ галочка "Повторное"
         if (hasText || hasPhotos || isRepeated) {
-            // Принудительно ставим "Нарушение"
+            // Принудительно ставим "Несоответствие"
             if (!radioBad.checked) {
                 radioBad.checked = true;
                 saveStatusAjax(itemId, 'false');
@@ -584,9 +593,9 @@
         // Настройка плейсхолдеров
         if (radioBad.checked) {
             if (isRepeated) {
-                commentField.placeholder = "Опишите повторное нарушение (ОБЯЗАТЕЛЬНО)...";
+                commentField.placeholder = "Опишите повторное несоответствие (ОБЯЗАТЕЛЬНО)...";
             } else {
-                commentField.placeholder = "Опишите нарушение (обязательно)...";
+                commentField.placeholder = "Опишите несоответствие (обязательно)...";
             }
         } else {
             commentField.placeholder = "Комментарий (необязательно)...";
@@ -596,7 +605,7 @@
 
     // 4. Инициализация при загрузке страницы
     document.addEventListener("DOMContentLoaded", function() {
-        // Проходим по всем кнопкам "Нарушение", чтобы выставить правильные плейсхолдеры
+        // Проходим по всем кнопкам "Несоответствие", чтобы выставить правильные плейсхолдеры
         const allBadButtons = document.querySelectorAll('[id^="radio_bad_"]');
         allBadButtons.forEach(btn => {
             const itemId = btn.id.split('_')[2];
@@ -651,6 +660,16 @@
         const files = inputElement.files;
         if (files.length === 0) return;
 
+        // 1. ИЩЕМ ЭЛЕМЕНТЫ ИНТЕРФЕЙСА
+        const btnGallery = document.getElementById(`btn_gallery_${itemId}`);
+        const btnCamera = document.getElementById(`btn_camera_${itemId}`);
+        const spinner = document.getElementById(`loading-spinner-${itemId}`);
+
+        // 2. БЛОКИРУЕМ КНОПКИ И ПОКАЗЫВАЕМ СПИННЕР
+        if (btnGallery) btnGallery.classList.add('disabled-state');
+        if (btnCamera) btnCamera.classList.add('disabled-state');
+        if (spinner) spinner.style.display = 'flex'; // Показываем спиннер
+
         const formData = new FormData();
         for (let i = 0; i < files.length; i++) {
             formData.append('photos', files[i]);
@@ -658,21 +677,18 @@
 
         const url = `/api/upload-photo/${itemId}/`;
 
+        // 3. ОТПРАВЛЯЕМ ЗАПРОС
         fetch(url, { method: 'POST', headers: {'X-CSRFToken': csrftoken}, body: formData })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'ok') {
                 const container = document.getElementById(`photo-container-${itemId}`);
                 data.photos.forEach(photo => {
-                    // ... (код генерации HTML картинки остается тем же) ...
                     const html = `
                         <div class="position-relative photo-wrapper" id="photo-wrapper-${photo.id}">
-
-                            <!-- ИЗМЕНЕНИЕ ЗДЕСЬ (target="_blank" заменен на data-fancybox) -->
                             <a href="${photo.url}" data-fancybox="gallery-${itemId}" data-caption="Новое фото">
                                 <img src="${photo.url}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
                             </a>
-
                             <button type="button" class="btn position-absolute top-0 end-0 m-1 p-0 rounded-circle bg-white shadow-sm d-flex justify-content-center align-items-center" style="width: 28px; height: 28px; opacity: 0.9;" onclick="deletePhoto(${photo.id}, ${itemId})">
                                 <i class="bi bi-trash-fill text-danger" style="font-size: 14px;"></i>
                             </button>
@@ -680,12 +696,24 @@
                     container.insertAdjacentHTML('beforeend', html);
                 });
 
+                // Очищаем input (чтобы можно было выбрать тот же файл снова)
                 inputElement.value = '';
 
-                // --- ВАЖНОЕ ИЗМЕНЕНИЕ ---
-                // Вызываем проверку только ТЕПЕРЬ, когда фото уже на экране
+                // Вызываем логику авто-переключения на "Несоответствие"
                 handleInteraction(itemId);
+            } else {
+                alert('Ошибка сервера при сохранении фото.');
             }
+        })
+        .catch(error => {
+            console.error('Ошибка сети:', error);
+            alert('Сбой сети при загрузке фото. Проверьте интернет.');
+        })
+        .finally(() => {
+            // 4. ГАРАНТИРОВАННАЯ РАЗБЛОКИРОВКА (Сработает всегда)
+            if (btnGallery) btnGallery.classList.remove('disabled-state');
+            if (btnCamera) btnCamera.classList.remove('disabled-state');
+            if (spinner) spinner.style.display = 'none'; // Прячем спиннер
         });
     }
 
@@ -701,7 +729,7 @@
             body: formData
         }).then(response => {
             if (response.ok) {
-                console.log(`Повторное нарушение ${itemId} сохранено: ${isRepeated}`);
+                console.log(`Повторное несоответствие ${itemId} сохранено: ${isRepeated}`);
             } else {
                 console.error('Ошибка сохранения повторного нарушения');
             }
@@ -758,7 +786,7 @@
         let errorMessage = "Заполните обязательные поля!"; // Дефолтное сообщение
 
         items.forEach(radioBad => {
-            if (radioBad.checked) { // Если выбрано Нарушение
+            if (radioBad.checked) { // Если выбрано Несоответствие
                 const itemId = radioBad.id.split('_')[2];
                 const commentField = document.getElementById(`comment_${itemId}`);
                 const photoContainer = document.getElementById(`photo-container-${itemId}`);
@@ -801,7 +829,7 @@
         });
 
         // 3. --- НОВАЯ ПРОВЕРКА: Логика парадокса ---
-        // Ищем все отмеченные чекбоксы "Повторное нарушение", у которых вдруг НЕ нажато "Нарушение"
+        // Ищем все отмеченные чекбоксы "Повторное несоответствие", у которых вдруг НЕ нажато "Несоответствие"
         // (Хотя наша логика handleInteraction не должна этого допустить, но для железобетонности)
         const repeatedCheckboxes = document.querySelectorAll('[id^="check_repeated_"]:checked');
         repeatedCheckboxes.forEach(checkbox => {
@@ -810,7 +838,7 @@
 
             if (!radioBad.checked) {
                 hasError = true;
-                errorMessage = "Вы отметили 'Повторное нарушение', но статус пункта стоит 'ОК'. Это недопустимо.";
+                errorMessage = "Вы отметили 'Повторное несоответствие', но статус пункта стоит 'ОК'. Это недопустимо.";
                 if (!firstErrorElement) firstErrorElement = checkbox;
             }
         });

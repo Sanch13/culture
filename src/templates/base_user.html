@@ -22,7 +22,7 @@
 <nav class="navbar navbar-expand-md navbar-light bg-white fixed-top shadow-sm">
     <div class="container">
         <!-- Логотип -->
-        <a class="navbar-brand fw-bold d-flex align-items-center gap-2 py-0 m-0" href="{% url 'employee_dashboard' %}" style="height: 70px;">
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2 py-0 mt-0" href="{% url 'employee_dashboard' %}">
             <!-- Настраиваем размер логотипа прямо здесь (или выносим в класс .nav-logo) -->
             <img src="{% static 'img/logo-bg.png' %}" alt="Логотип" class="nav-logo">
             <span class="lh-sm" style="font-size: 1.1rem; max-width: 250px; white-space: normal;">
@@ -38,12 +38,15 @@
         <div class="collapse navbar-collapse" id="userNavbar">
             <!-- Левая часть меню -->
             <ul class="navbar-nav me-auto mb-2 mb-md-0">
-                <li class="nav-item">
-                    <a class="nav-link text-dark {% if request.resolver_match.url_name == 'profile_edit' %}active fw-bold{% endif %}"
-                       href="{% url 'users:profile_edit' %}">
-                       {{ user.first_name }} {{ user.last_name }}
-                    </a>
-                </li>
+
+<!--                -->
+<!--                <li class="nav-item">-->
+<!--                    <a class="nav-link text-dark {% if request.resolver_match.url_name == 'profile_edit' %}active fw-bold{% endif %}"-->
+<!--                       href="{% url 'users:profile_edit' %}">-->
+<!--                       {{ user.first_name }} {{ user.last_name }}-->
+<!--                    </a>-->
+<!--                </li>-->
+<!--                -->
 
                 {% if is_boss %}
                 <li class="nav-item">
@@ -81,6 +84,14 @@
 <!--                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Допуск: НЕТ-->
 <!--                    </span>-->
 <!--                {% endif %}-->
+
+                <!-- Имя пользователя -->
+                <div class="text-dark ">
+                    <a class="nav-link text-dark {% if request.resolver_match.url_name == 'profile_edit' %}active fw-bold{% endif %}"
+                       href="{% url 'users:profile_edit' %}">
+                       {{ user.first_name }} {{ user.last_name }}
+                    </a>
+                </div>
 
 <!--                -->
 <!--                &lt;!&ndash; Имя пользователя &ndash;&gt;-->
