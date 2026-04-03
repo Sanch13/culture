@@ -225,19 +225,18 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
         }
         human_reason = reason_dict.get(reason_type, "Неизвестно")
 
+        final_reason_str = f"{human_reason}"
+        if reason_text:
+            final_reason_str += f" ({reason_text})"
+
         SwapLog.objects.create(
             requestor=current_user,
             target_user=target_user,
             source_date=current_date,
             target_date=target_date,
             reason_type=reason_type,
-            reason=reason_text,
+            reason=final_reason_str,
         )
-
-    # Формируем красивое инфо для админа
-    final_reason_str = f"{human_reason}"
-    if reason_text:
-        final_reason_str += f" ({reason_text})"
 
     info_about_change = (
         f"Дата: {current_date}.\nПроверяющий {current_user.last_name} {current_user.first_name} "
