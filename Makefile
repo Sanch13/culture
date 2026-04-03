@@ -6,7 +6,7 @@ LOGS = docker logs
 ENV = --env-file .env
 LOCAL_FILE = docker-compose.local.yml
 STORAGES_FILE = docker_compose/storages.yaml
-APP_CONTAINER = web
+APP_CONTAINER = web-culture
 SERVICE_NAME = web
 IMAGE = miran2025/culture:0.1.2
 
@@ -69,6 +69,33 @@ app-del:
 .PHONY: cash
 cash:
 	@${D} system prune -f
+
+.PHONY: app-rebuild-new-image
+app-rebuild-new-image:
+	@$(MAKE) app-down
+	@$(MAKE) app-del
+	@$(MAKE) cash
+	@$(MAKE) app
+	@$(MAKE) wait-for-web
+	@$(MAKE) migrations
+	@$(MAKE) migrate
+
+.PHONY: migrations
+migrations:
+	@${DC} -f ${PROD_FILE} exec ${SERVICE_NAME} python manage.py makemigrations
+
+.PHONY: migrate
+migrate:
+	@${DC} -f ${PROD_FILE} exec ${SERVICE_NAME} python manage.py migrate
+
+.PHONY: wait-for-web
+wait-for-web:
+	@echo "Waiting for web container to be ready..."
+	@while ! ${DC} -f ${PROD_FILE} exec ${SERVICE_NAME} echo "ready" 2>/dev/null; do \
+		sleep 1; \
+	done
+	@sleep 2
+
 
 # .PHONY: test
 # test:  #  Запускает тесты только в папке tests

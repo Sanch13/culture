@@ -33,12 +33,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>👥 Сотрудники</h1>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
+    <h1 class="m-0">👥 Сотрудники</h1>
 
     <!-- Форма поиска -->
-    <form class="d-flex" method="get">
-        <input class="form-control me-2" type="search" name="q" placeholder="Поиск по ФИО или Email" aria-label="Search" value="{{ search_query }}">
+    <form class="d-flex w-50 w-md-auto" method="get">
+        <input class="form-control me-2" type="search" name="q" placeholder="Поиск..." aria-label="Search" value="{{ search_query }}">
         <button class="btn btn-outline-primary" type="submit">Найти</button>
         {% if search_query %}
             <a href="{% url 'admin_employees' %}" class="btn btn-outline-secondary ms-2">Сброс</a>
@@ -46,8 +46,59 @@
     </form>
 </div>
 
-<div class="mt-3 text-muted">
-    Всего сотрудников: {{ users.count }}
+<!-- БЛОК СТАТИСТИКИ (Новый) -->
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4">
+    <!-- Всего -->
+    <div class="col">
+        <div class="card bg-primary text-white h-100 border-0 shadow-sm">
+            <div class="card-body py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0 fw-normal opacity-75">Всего активных</h6>
+                    <h3 class="mb-0 fw-bold">{{ total_active }}</h3>
+                </div>
+                <i class="bi bi-people-fill opacity-50" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Аудиторы (Workers) -->
+    <div class="col">
+        <div class="card bg-secondary text-white h-100 border-0 shadow-sm">
+            <div class="card-body py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0 fw-normal opacity-75">Аудиторы</h6>
+                    <h3 class="mb-0 fw-bold">{{ count_workers }}</h3>
+                </div>
+                <i class="bi bi-clipboard-check-fill opacity-50" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Менеджмент -->
+    <div class="col">
+        <div class="card bg-warning text-dark h-100 border-0 shadow-sm">
+            <div class="card-body py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0 fw-normal opacity-75">Менеджмент</h6>
+                    <h3 class="mb-0 fw-bold">{{ count_management }}</h3>
+                </div>
+                <i class="bi bi-person-badge-fill opacity-50" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Администраторы -->
+    <div class="col">
+        <div class="card bg-danger text-white h-100 border-0 shadow-sm">
+            <div class="card-body py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0 fw-normal opacity-75">Администраторы</h6>
+                    <h3 class="mb-0 fw-bold">{{ count_admins }}</h3>
+                </div>
+                <i class="bi bi-shield-lock-fill opacity-50" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="card shadow-sm">
@@ -78,18 +129,25 @@
                     <td>{{ employee.phone|format_phone|default:"-" }}</td>
 
                     <!-- Роль -->
-                    <td>
+                    <td data-label="Роль">
                         {% if employee.role == 'admin' %}
-                        <span class="badge bg-danger">Администратор</span>
+                            <span class="badge bg-danger">Администратор</span>
+
+                        {% elif employee.role == 'production_chief' %}
+                            <span class="badge bg-light text-dark border border-secondary">Нач. производства</span>
 
                         {% elif employee.role == 'manager' %}
-                        <!-- Новый бейдж для начальника (например, темно-синий/фиолетовый) -->
-                        <span class="badge bg-info text-dark">Нач. участка</span>
+                            <span class="badge bg-info text-dark">Нач. участка</span>
 
-                        {% elif employee.role == 'master' %}
-                            <span class="badge bg-primary">Мастер</span>
+                        {% elif employee.role == 'observer' %}
+                            <span class="badge bg-dark">Наблюдатель</span>
+
+                        {% elif employee.role == 'master' or employee.role == 'deputy' or employee.role == 'senior_master' %}
+                            <!-- Объединяем мастеров и замов в одну визуальную категорию -->
+                            <span class="badge bg-primary">Мастер / Зам</span>
 
                         {% else %}
+                            <!-- По умолчанию (worker и прочие) -->
                             <span class="badge bg-secondary">Сотрудник</span>
                         {% endif %}
                     </td>

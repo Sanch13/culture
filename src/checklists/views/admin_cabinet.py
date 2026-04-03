@@ -302,14 +302,13 @@ def admin_exchange_shifts(request):
 @admin_required
 def admin_employees_list(request):
     """
-    Список всех сотрудников с поиском и фильтрацией.
+    Список всех сотрудников с поиском, фильтрацией и статистикой.
     """
-    query = request.GET.get("q", "")  # Получаем поисковый запрос из URL (?q=Иванов)
+    query = request.GET.get("q", "")
 
-    # Базовый запрос: Все пользователи, сортируем по Фамилии
+    # 1. БАЗОВЫЙ ЗАПРОС
     users = User.objects.all().order_by("last_name", "first_name")
 
-    # Если есть поиск - фильтруем
     if query:
         users = users.filter(
             Q(last_name__icontains=query)
@@ -317,9 +316,30 @@ def admin_employees_list(request):
             | Q(email__icontains=query)
         )
 
+    # 2. СТАТИСТИКА (Считаем только активных)
+    # Используем .count() - это быстро, так как делается на стороне БД (SELECT COUNT(*))
+    active_users = User.objects.filter(is_active=True)
+
+    total_active = active_users.count()
+
+    count_workers = active_users.filter(role=User.ROLE_WORKER).count()
+
+    count_admins = active_users.filter(role=User.ROLE_ADMIN).count()
+
+    # Менеджмент - это все остальные
+    # Исключаем 'worker' и 'admin'
+    count_management = active_users.exclude(
+        role__in=[User.ROLE_WORKER, User.ROLE_ADMIN]
+    ).count()
+
     context = {
         "users": users,
         "search_query": query,
+        # Передаем статистику в шаблон
+        "total_active": total_active,
+        "count_workers": count_workers,
+        "count_management": count_management,
+        "count_admins": count_admins,
     }
     return render(request, "checklists/admin_employees.html", context)
 
