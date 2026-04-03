@@ -9,6 +9,9 @@
         .fancybox__container { --f-bg: rgba(0, 0, 0, 0.85); }
         .history-card { border-left: 4px solid #ffc107; background-color: #fffdf5; }
         .history-date { font-size: 0.8rem; font-weight: bold; color: #856404; }
+        .bg-ok {
+            background-color: #bddacd;
+        }
     </style>
 {% endblock %}
 
@@ -41,7 +44,7 @@
             </div>
             <div class="card-body p-0">
                 {% for item in items %}
-                    <div class="p-3 border-bottom d-flex gap-3 align-items-start bg-opacity-10 {% if item.is_compliant %}bg-success{% else %}bg-danger{% endif %}">
+                    <div class="p-3 border-bottom d-flex gap-3 align-items-start bg-opacity-10 {% if item.is_compliant %}bg-ok{% else %}bg-danger{% endif %}">
 
                         <!-- Статус (Иконка) -->
                         <div class="flex-shrink-0" style="font-size: 1.5rem;">
