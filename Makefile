@@ -31,13 +31,13 @@ app-load:
 
 
 # Создать миграции
-.PHONY: migrations # make migrate app="users"
-migrations:
+.PHONY: local-migrations # make migrate app="users"
+local-migrations:
 	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py makemigrations "$(app)"
 
 # Применить миграции
-.PHONY: migrate
-migrate:
+.PHONY: local-migrate
+local-migrate:
 	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py migrate
 
 .PHONY: app-sync
