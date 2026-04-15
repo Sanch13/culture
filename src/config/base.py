@@ -12,6 +12,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Сторонние (Observability)
+    "django_prometheus",
 ]
 
 INSTALLED_APPS += [
@@ -20,19 +22,26 @@ INSTALLED_APPS += [
     "users",
 ]
 
+INSTALLED_APPS += [
+    "django_structlog",
+]
+
 AUTH_USER_MODEL = "users.User"
 LOGIN_REDIRECT_URL = "index"
 LOGOUT_REDIRECT_URL = "users:login"
 LOGIN_URL = "users:login"
 
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_structlog.middlewares.RequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -125,3 +134,6 @@ CELERY_RESULT_BACKEND = settings.CELERY_RESULT_BACKEND
 CELERY_ACCEPT_CONTENT = settings.CELERY_ACCEPT_CONTENT
 CELERY_TASK_SERIALIZER = settings.CELERY_TASK_SERIALIZER
 CELERY_TIMEZONE = "Europe/Minsk"
+
+DJANGO_STRUCTLOG_CELERY_ENABLED = True
+DJANGO_STRUCTLOG_REQUEST_LOG_LEVEL = "INFO"

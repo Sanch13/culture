@@ -8,8 +8,17 @@ dependencies = [
     "celery==5.5.3",
     "django==5.2.8",
     "django-celery-beat==2.8.1",
+    "django-prometheus==2.4.1",
+    "django-structlog==10.0.0",
     "gunicorn==23.0.0",
     "holidays>=0.93",
+    "opentelemetry-api==1.40.0",
+    "opentelemetry-exporter-otlp==1.40.0",
+    "opentelemetry-instrumentation-celery==0.61b0",
+    "opentelemetry-instrumentation-django==0.61b0",
+    "opentelemetry-instrumentation-psycopg2==0.61b0",
+    "opentelemetry-instrumentation-requests==0.61b0",
+    "opentelemetry-sdk==1.40.0",
     "phonenumbers==9.0.22",
     "pillow==11.3.0",
     "pillow-heif==1.2.0",
@@ -18,6 +27,7 @@ dependencies = [
     "python-dotenv==1.2.1",
     "redis==5.2.1",
     "requests==2.33.0",
+    "structlog==25.5.0",
 ]
 
 [build-system]

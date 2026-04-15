@@ -1,6 +1,8 @@
 import os
+
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 default_settings = "config.prod"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", default_settings)
@@ -8,6 +10,16 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", default_settings)
 app = Celery("culture")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
+
+# --- ПОДКЛЮЧАЕМ OPENTELEMETRY ---
+# Этот сигнал сработает, когда Celery поднимет "рабочего", готового выполнять задачи.
+@worker_process_init.connect(weak=False)
+def init_celery_tracing(*args, **kwargs):
+    from config.otel import setup_opentelemetry
+
+    setup_opentelemetry()
+
 
 app.conf.beat_schedule = {
     # Задача 1: Генерация расписания. Запуск каждую пятницу в 14:20

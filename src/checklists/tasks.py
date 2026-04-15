@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
+import structlog
 from celery import shared_task
 
 from checklists.models import Inspection
@@ -21,6 +22,8 @@ from checklists.services import (
 )
 
 User = get_user_model()
+
+logger = structlog.get_logger(__name__)
 
 
 @shared_task
@@ -93,7 +96,15 @@ def send_inspection_reminders():
     retry_jitter=True,  # Добавляет случайный шум (чтобы 100 писем не ударили в сервер в 1 миллисекунду, когда он поднимется)
 )
 def send_email(self, to: str, subject: str, body: str):
+    log = logger.bind(
+        recipient=to,
+        subject=subject,
+        attempt=self.request.retries + 1,
+        task_id=self.request.id,
+    )
     try:
+        log.info("email_delivery_started")
+
         message = EmailMessage()
         message["Subject"] = subject
         message["From"] = settings.EMAIL_HOST_USER
@@ -102,27 +113,49 @@ def send_email(self, to: str, subject: str, body: str):
 
         send_message(message=message)
 
+        log.info("email_delivery_finished")
         return f"Письмо успешно отправлено на {to}"
 
     except Exception as exc:
-        print(f"❌ Ошибка отправки на {to}. Сервер недоступен: {exc}")
+        if self.request.retries < self.max_retries:
+            log.warning("email_delivery_retry", error=str(exc), next_retry_in=300)
+        else:
+            log.error("email_delivery_final_failure", error=str(exc), exc_info=True)
+
         raise self.retry(exc=exc)
 
 
-@shared_task
-def notify_user_about_swap(date_str, user_id):
+@shared_task(bind=True)  # Добавляем bind=True для доступа к контексту задачи
+def notify_user_about_swap(self, date_str, user_id):
     """
     Задача: Уведомить сотрудника, что на него перекинули смену.
     """
-    data = get_swap_notification_data(date_str, user_id)
+    log = logger.bind(
+        task_name=self.name,
+        task_id=self.request.id,
+        target_date=date_str,
+        user_id=user_id,
+    )
 
-    if data:
+    log.info("preparing_swap_notification")
+    try:
+        data = get_swap_notification_data(date_str, user_id)
+
+        if not data:
+            log.warning("notification_data_empty")
+            return "No email data found"
+
+        log.info("dispatching_send_email_task", email=data["email"])
+
         # Отправляем письмо
         send_email.delay(to=data["email"], subject=data["subject"], body=data["body"])
-        print(f"📧 [SWAP NOTIFICATION] Sent to {data['email']}")
-        return f"Sent swap email to {data['email']}"
 
-    return "No email sent (invalid data or no email)"
+        log.info("notification_preparation_completed")
+        return "Notification task queued"
+
+    except Exception as e:
+        log.error("notification_preparation_error", error=str(e), exc_info=True)
+        raise
 
 
 @shared_task

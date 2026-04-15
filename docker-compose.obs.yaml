@@ -1,0 +1,81 @@
+services:
+  loki:
+    image: grafana/loki:3.6.10
+    container_name: obs-loki
+    user: "0:0"
+    volumes:
+      - ./observability/loki/config.yaml:/etc/loki/config.yaml
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/config.yaml
+    restart: unless-stopped
+    networks:
+      - obs_network
+
+  promtail:
+    image: grafana/promtail:3.6.10
+    container_name: obs-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/promtail/config.yaml:/etc/promtail/config.yaml
+      - promtail_data:/tmp
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - obs_network
+
+  grafana:
+    image: grafana/grafana:11.6.9
+    container_name: obs-grafana
+    ports:
+      # ЭТО ЕДИНСТВЕННЫЙ ПОРТ, КОТОРЫЙ МЫ ОТКРЫВАЕМ НАРУЖУ
+      # (Можешь потом закрыть его Nginx'ом и повесить SSL)
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    #    environment:
+    #      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - obs_network
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.139.0
+    container_name: obs-victoriametrics
+    volumes:
+      - vm_data:/victoria-metrics-data
+      - ./observability/victoriametrics/prometheus.yaml:/etc/prometheus/prometheus.yaml
+    command:
+      - "-promscrape.config=/etc/prometheus/prometheus.yaml"
+      - "-retentionPeriod=1y" # Хранить метрики 1 год (они занимают копейки места)
+    restart: unless-stopped
+    networks:
+      - obs_network
+
+  tempo:
+    image: grafana/tempo:2.10.3
+    container_name: obs-tempo
+    user: "0:0"
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./observability/tempo/config.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    restart: unless-stopped
+    networks:
+      - obs_network
+
+networks:
+  obs_network:
+    name: obs_network
+    driver: bridge
+
+volumes:
+  loki_data:
+  promtail_data:
+  grafana_data:
+  vm_data:
+  tempo_data:

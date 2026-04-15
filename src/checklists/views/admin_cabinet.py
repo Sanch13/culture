@@ -1,5 +1,8 @@
 from datetime import timedelta
 
+import structlog
+import time
+
 from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Count, Q
@@ -27,6 +30,8 @@ from checklists.models import (
 from checklists.tasks import notify_user_about_swap
 
 User = get_user_model()
+
+logger = structlog.get_logger(__name__)
 
 
 # --- ЗОНА АДМИНИСТРАТОРА (Строгий режим) ---
@@ -118,6 +123,11 @@ def admin_inspection_detail(request, inspection_id):
 
 @admin_required
 def admin_weekly_schedule(request):
+    start_time = time.perf_counter()  # Замеряем время выполнения
+    log = logger.bind(view_name="admin_weekly_schedule", user_id=request.user.id)
+
+    log.info("fetching_schedule_data_start")
+
     today = timezone.now().date()
     start_of_current_week = today - timedelta(days=today.weekday())
 
@@ -132,6 +142,10 @@ def admin_weekly_schedule(request):
     all_schedules = Schedule.objects.filter(
         date__range=[start_of_current_week, end_date]
     ).select_related("inspector", "inspection", "template")
+
+    log.info(
+        "db_data_loaded", routes_count=len(routes), schedules_count=len(all_schedules)
+    )
 
     # 3. Создаем карту маршрутов: {template_id: route_id}
     tmpl_to_route = {}
@@ -221,12 +235,24 @@ def admin_weekly_schedule(request):
         "weeks_data": weeks_data,
         "today": today,
     }
+
+    # В конце обработки:
+    duration = time.perf_counter() - start_time
+    log.info("fetching_schedule_data_completed", duration_sec=round(duration, 3))
     return render(request, "checklists/admin_schedule.html", context)
 
 
 @admin_required
 @require_POST
 def admin_exchange_shifts(request):
+    log = logger.bind(
+        view_name="admin_exchange_shifts",
+        requestor_id=request.user.id,
+        source_date=request.POST.get("source_date"),
+        source_inspector_id=request.POST.get("source_inspector_id"),
+    )
+
+    log.info("swap_request_received")
     # 1. Получаем данные ИСХОДНОЙ смены (кто отдает)
     source_date_str = request.POST.get("source_date")
     source_inspector_id = request.POST.get("source_inspector_id")
@@ -259,43 +285,55 @@ def admin_exchange_shifts(request):
         )
         return redirect("admin_schedule")
 
-    # 4. СОВЕРШАЕМ ОБМЕН (Batch Swap)
-    with transaction.atomic():
-        # Получаем объекты пользователей для логов и уведомлений
-        source_user = source_tasks[0].inspector
-        target_user = target_tasks[0].inspector
+    try:
+        # 4. СОВЕРШАЕМ ОБМЕН (Batch Swap)
+        with transaction.atomic():
+            # Получаем объекты пользователей для логов и уведомлений
+            source_user = source_tasks[0].inspector
+            target_user = target_tasks[0].inspector
+            log.info(
+                "swap_processing",
+                source_tasks_count=len(source_tasks),
+                target_tasks_count=len(target_tasks),
+            )
 
-        # Меняем Исходных (отдаем целевому)
-        for t in source_tasks:
-            t.inspector = target_user
-            t.is_swapped = False  # Целевой теперь работает сегодня
-            t.save()
+            # Меняем Исходных (отдаем целевому)
+            for t in source_tasks:
+                t.inspector = target_user
+                t.is_swapped = False  # Целевой теперь работает сегодня
+                t.save()
 
-        # Меняем Целевых (отдаем исходному)
-        for t in target_tasks:
-            t.inspector = source_user
-            t.is_swapped = True  # Исходный уехал в будущее, его больше не трогать
-            t.save()
+            # Меняем Целевых (отдаем исходному)
+            for t in target_tasks:
+                t.inspector = source_user
+                t.is_swapped = True  # Исходный уехал в будущее, его больше не трогать
+                t.save()
 
-        # Пишем лог
-        SwapLog.objects.create(
-            requestor=request.user,
-            target_user=target_user,
-            source_date=source_date_str,
-            target_date=target_date_str,
-            reason=f"Обмен сменами {source_user.last_name} ({source_date_str}) <-> {target_user.last_name} ({target_date_str})",
+            # Пишем лог
+            SwapLog.objects.create(
+                requestor=request.user,
+                target_user=target_user,
+                source_date=source_date_str,
+                target_date=target_date_str,
+                reason=f"Обмен сменами {source_user.last_name} ({source_date_str}) <-> {target_user.last_name} ({target_date_str})",
+            )
+
+            # Уведомления (если нужно)
+            # target_user теперь назначен на source_date
+            notify_user_about_swap.delay(source_date_str, target_user.id)
+            log.info("swap_notification_queued", recipient_id=target_user.id)
+            # source_user теперь назначен на target_date
+            # notify_user_about_swap.delay(target_date_str, source_user.id)
+
+        messages.success(
+            request,
+            f"Успешный обмен: {target_user.last_name} выходит {source_date_str}, а {source_user.last_name} — {target_date_str}.",
         )
+        log.info("swap_successful")
+    except Exception as e:
+        log.error("swap_failed", error=str(e), exc_info=True)
+        messages.error(request, "Ошибка при обмене")
 
-        # Уведомления (если нужно)
-        # target_user теперь назначен на source_date
-        notify_user_about_swap.delay(source_date_str, target_user.id)
-        # source_user теперь назначен на target_date
-        # notify_user_about_swap.delay(target_date_str, source_user.id)
-
-    messages.success(
-        request,
-        f"Успешный обмен: {target_user.last_name} выходит {source_date_str}, а {source_user.last_name} — {target_date_str}.",
-    )
     return redirect("admin_schedule")
 
 

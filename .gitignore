@@ -78,3 +78,5 @@ Thumbs.db
 
 # C extensions
 *.so
+
+observability/

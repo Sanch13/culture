@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     MAILCOW_API_URL: str
     MAILCOW_API_KEY: str
 
+    OTEL_EXPORTER_OTLP_ENDPOINT: str
+    OTEL_EXPORTER_OTLP_TIMEOUT: int
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
         env_file_encoding="utf-8",

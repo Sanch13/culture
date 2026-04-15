@@ -214,6 +214,13 @@
 # 03-04-2026 ---> miran2025/culture:0.1.2
 ####################################################################################
 
+# 07-04-2026
+- add structlog
+- setup observability
+- setup logging
+-
+
+
 
 TODO: На сервере ---> Сделать МИГРАЦИИ!!! Скопировать статику!!!
 TODO: УДАЛИТЬ свой email из сервисов prepare_weekly_notifications, prepare_daily_notifications

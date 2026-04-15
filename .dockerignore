@@ -27,6 +27,8 @@ nginx
 static/
 fixtures
 
+observability/
+
 # Private keys and certificates
 *.pem
 

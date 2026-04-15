@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import path, include
 from django.shortcuts import render
 
@@ -14,15 +15,21 @@ def custom_500(request):
     return render(request, "500.html", status=500)
 
 
+def health_check(request):
+    return HttpResponse("ok")
+
+
 handler404 = custom_404
 handler500 = custom_500
 
-
 urlpatterns = [
+    path("api/v1/health", health_check),
     path("auth/", include("users.urls", namespace="users")),
-    path("", include("checklists.urls")),
     path("admin/", admin.site.urls),
     path("accounts/", include("django.contrib.auth.urls")),
+    # МЕТРИКИ (Ставим ПЕРЕД catch-all маршрутами)
+    path("", include("django_prometheus.urls")),
+    path("", include("checklists.urls")),
 ]
 
 if settings.DEBUG:

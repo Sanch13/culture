@@ -29,8 +29,6 @@ def send_message(message: Message):
         server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
         server.send_message(message)
 
-    # logger.info(f"Письмо успешно отправлено!")
-
 
 def format_phone_number(raw_phone):
     """

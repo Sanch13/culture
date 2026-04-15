@@ -1,0 +1,95 @@
+services:
+  loki:
+    image: grafana/loki:3.6.10
+    container_name: obs-loki
+    user: "0:0"
+    volumes:
+      - ./observability/loki/config.yaml:/etc/loki/config.yaml
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/config.yaml
+    restart: unless-stopped
+    networks:
+      - obs-private
+
+  promtail:
+    image: grafana/promtail:3.6.10
+    container_name: obs-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/promtail/config.yaml:/etc/promtail/config.yaml
+      - promtail_data:/tmp
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - obs-private
+
+  grafana:
+    image: grafana/grafana:11.6.9
+    container_name: obs-grafana
+    ports:
+      # ЭТО ЕДИНСТВЕННЫЙ ПОРТ, КОТОРЫЙ МЫ ОТКРЫВАЕМ НАРУЖУ
+      # (Можешь потом закрыть его Nginx'ом и повесить SSL)
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+#    environment:
+#      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - obs_public
+      - obs-private
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.139.0
+    container_name: obs-victoriametrics
+    volumes:
+      - vm_data:/victoria-metrics-data
+      - ./observability/victoriametrics/prometheus.prod.yaml:/etc/prometheus/prometheus.prod.yaml
+    command:
+      - "-promscrape.config=/etc/prometheus/prometheus.prod.yaml"
+      - "-retentionPeriod=1y" # Хранить метрики 1 год (они занимают копейки места)
+    restart: unless-stopped
+    networks:
+      - obs-private
+      - web-public
+
+  tempo:
+    image: grafana/tempo:2.10.3
+    container_name: obs-tempo
+    user: "0:0"
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./observability/tempo/config.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      # Открываем порты OTLP (чтобы Django из другой сети мог слать трейсы)
+      # 4317 - gRPC, 4318 - HTTP
+      - "4317:4317"
+      - "4318:4318"
+    restart: unless-stopped
+    networks:
+      - obs-private
+      - web-public
+
+volumes:
+  loki_data:
+  promtail_data:
+  grafana_data:
+  vm_data:
+  tempo_data:
+
+networks:
+  obs_public:
+    name: obs_public
+    driver: bridge
+  obs-private:
+    name: obs-private
+    driver: bridge
+    internal: true
+  web-public:
+    external: true
