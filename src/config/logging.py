@@ -73,6 +73,7 @@ LOGGING = {
                 structlog.stdlib.add_log_level,
                 add_otel_trace_id,
                 structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.stdlib.ExtraAdder(),
             ],
         },
     },
