@@ -1,6 +1,7 @@
 import structlog
 from opentelemetry import trace
 from django.dispatch import receiver
+
 from django_structlog.signals import bind_extra_request_metadata
 
 
