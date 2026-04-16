@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 import structlog
-import time
 
 from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404
@@ -123,10 +122,9 @@ def admin_inspection_detail(request, inspection_id):
 
 @admin_required
 def admin_weekly_schedule(request):
-    start_time = time.perf_counter()  # Замеряем время выполнения
-    log = logger.bind(view_name="admin_weekly_schedule", user_id=request.user.id)
+    log = logger.bind(user_id=request.user.id)
 
-    log.info("fetching_schedule_data_start")
+    log.info("fetching_schedule_data_start - Старт построения расписания")
 
     today = timezone.now().date()
     start_of_current_week = today - timedelta(days=today.weekday())
@@ -144,7 +142,9 @@ def admin_weekly_schedule(request):
     ).select_related("inspector", "inspection", "template")
 
     log.info(
-        "db_data_loaded", routes_count=len(routes), schedules_count=len(all_schedules)
+        "db_data_loaded - Данные загружены с БД",
+        routes_count=len(routes),
+        schedules_count=len(all_schedules),
     )
 
     # 3. Создаем карту маршрутов: {template_id: route_id}
@@ -237,8 +237,9 @@ def admin_weekly_schedule(request):
     }
 
     # В конце обработки:
-    duration = time.perf_counter() - start_time
-    log.info("fetching_schedule_data_completed", duration_sec=round(duration, 3))
+    log.info(
+        "fetching_schedule_data_completed - Данные построены для отображения таблицы"
+    )
     return render(request, "checklists/admin_schedule.html", context)
 
 
@@ -246,13 +247,12 @@ def admin_weekly_schedule(request):
 @require_POST
 def admin_exchange_shifts(request):
     log = logger.bind(
-        view_name="admin_exchange_shifts",
         requestor_id=request.user.id,
         source_date=request.POST.get("source_date"),
         source_inspector_id=request.POST.get("source_inspector_id"),
     )
 
-    log.info("swap_request_received")
+    log.info("swap_request_received - Старт замены проверяющих")
     # 1. Получаем данные ИСХОДНОЙ смены (кто отдает)
     source_date_str = request.POST.get("source_date")
     source_inspector_id = request.POST.get("source_inspector_id")
@@ -292,7 +292,7 @@ def admin_exchange_shifts(request):
             source_user = source_tasks[0].inspector
             target_user = target_tasks[0].inspector
             log.info(
-                "swap_processing",
+                "swap_processing - Процесс смены проверяющих",
                 source_tasks_count=len(source_tasks),
                 target_tasks_count=len(target_tasks),
             )
@@ -321,7 +321,10 @@ def admin_exchange_shifts(request):
             # Уведомления (если нужно)
             # target_user теперь назначен на source_date
             notify_user_about_swap.delay(source_date_str, target_user.id)
-            log.info("swap_notification_queued", recipient_id=target_user.id)
+            log.info(
+                "swap_notification_queued - Поставил в очередь уведомить проверяющего",
+                recipient_id=target_user.id,
+            )
             # source_user теперь назначен на target_date
             # notify_user_about_swap.delay(target_date_str, source_user.id)
 
@@ -329,9 +332,9 @@ def admin_exchange_shifts(request):
             request,
             f"Успешный обмен: {target_user.last_name} выходит {source_date_str}, а {source_user.last_name} — {target_date_str}.",
         )
-        log.info("swap_successful")
+        log.info("swap_successful - Успешный обмен проверками")
     except Exception as e:
-        log.error("swap_failed", error=str(e), exc_info=True)
+        log.error("swap_failed - Ошибка при обмене", error=str(e), exc_info=True)
         messages.error(request, "Ошибка при обмене")
 
     return redirect("admin_schedule")

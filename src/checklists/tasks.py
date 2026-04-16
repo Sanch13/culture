@@ -103,7 +103,7 @@ def send_email(self, to: str, subject: str, body: str):
         task_id=self.request.id,
     )
     try:
-        log.info("email_delivery_started")
+        log.info("email_delivery_started - Отправка письма")
 
         message = EmailMessage()
         message["Subject"] = subject
@@ -113,14 +113,22 @@ def send_email(self, to: str, subject: str, body: str):
 
         send_message(message=message)
 
-        log.info("email_delivery_finished")
+        log.info("email_delivery_finished - Письма успешно отправлено")
         return f"Письмо успешно отправлено на {to}"
 
     except Exception as exc:
         if self.request.retries < self.max_retries:
-            log.warning("email_delivery_retry", error=str(exc), next_retry_in=300)
+            log.warning(
+                "email_delivery_retry - Повторная отправка письма",
+                error=str(exc),
+                next_retry_in=300,
+            )
         else:
-            log.error("email_delivery_final_failure", error=str(exc), exc_info=True)
+            log.error(
+                "email_delivery_final_failure - Ошибка отправка письма",
+                error=str(exc),
+                exc_info=True,
+            )
 
         raise self.retry(exc=exc)
 
@@ -131,30 +139,36 @@ def notify_user_about_swap(self, date_str, user_id):
     Задача: Уведомить сотрудника, что на него перекинули смену.
     """
     log = logger.bind(
-        task_name=self.name,
-        task_id=self.request.id,
         target_date=date_str,
-        user_id=user_id,
     )
 
-    log.info("preparing_swap_notification")
+    log.info("preparing_swap_notification - Подготовка к отправке письма")
     try:
         data = get_swap_notification_data(date_str, user_id)
 
         if not data:
-            log.warning("notification_data_empty")
+            log.warning("notification_data_empty - Уведомление пустое")
             return "No email data found"
 
-        log.info("dispatching_send_email_task", email=data["email"])
+        log.info(
+            "dispatching_send_email_task - Передача подготовленного письма для отправки",
+            email=data["email"],
+        )
 
         # Отправляем письмо
         send_email.delay(to=data["email"], subject=data["subject"], body=data["body"])
 
-        log.info("notification_preparation_completed")
+        log.info(
+            "notification_preparation_completed - Подготовка уведомления успешно завершилось"
+        )
         return "Notification task queued"
 
     except Exception as e:
-        log.error("notification_preparation_error", error=str(e), exc_info=True)
+        log.error(
+            "notification_preparation_error - Ошибка подготовки уведомления",
+            error=str(e),
+            exc_info=True,
+        )
         raise
 
 

@@ -23,6 +23,33 @@ def add_otel_trace_id(logger, log_method, event_dict):
     return event_dict
 
 
+def add_component_name(logger, method_name, event_dict):
+    """Определяет короткое имя компонента на основе имени логгера или задачи"""
+    logger_name = event_dict.get("logger", "")
+
+    # 1. Если есть task_id или task_name — это точно Celery
+    if "task_id" in event_dict or "task_name" in event_dict:
+        event_dict["component"] = "CELERY"
+
+    # 2. Если логгер начинается на checklists
+    elif logger_name.startswith("checklists"):
+        event_dict["component"] = "CHECKLIST"
+
+    # 3. Если логгер начинается на users
+    elif logger_name.startswith("users"):
+        event_dict["component"] = "USERS"
+
+    # 4. Если это системные логи Django
+    elif logger_name.startswith("django"):
+        event_dict["component"] = "DJANGO"
+
+    # 5. Всё остальное
+    else:
+        event_dict["component"] = "SYSTEM"
+
+    return event_dict
+
+
 @receiver(bind_extra_request_metadata)
 def bind_user_info(request, logger, **kwargs):
     # Контекст запроса
@@ -47,6 +74,7 @@ structlog.configure(
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         add_otel_trace_id,
+        add_component_name,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
