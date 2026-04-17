@@ -9,7 +9,7 @@
 u:{{or .user_id "system"}}
 
 {container=~"web|celery"} | json
-| line_format `[{{upper .component}}] [{{upper .level}}] {{.event}} {{if .duration}}dur: {{.duration}}s{{end}} » {{if .request}}{{.request}}{{end}}{{if .code}} [{{.code}}]{{end}} | u:{{or .user_id "system"}} | {{if .email}}email: {{.email}}{{end}} | {{if .task_name}}task:{{.task_name}}{{end}} | {{.logger}} | {{.trace_id}}`
+| line_format `[{{upper .level}}] [{{upper .component}}] {{.event}} {{if .duration}}dur: {{.duration}}s{{end}} » {{if .request}}{{.request}}{{end}}{{if .code}} [{{.code}}]{{end}} | u:{{or .user_id "system"}} | {{if .email}}email: {{.email}}{{end}} | {{if .task_name}}task:{{.task_name}}{{end}} | {{.logger}} | {{.trace_id}}`
 
 
 ### search by id
