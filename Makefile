@@ -5,6 +5,7 @@ EXEC = docker exec -it
 LOGS = docker logs
 ENV = --env-file .env
 LOCAL_FILE = docker-compose.local.yml
+OBS_LOCAL_FILE = docker-compose.obs.yaml
 STORAGES_FILE = docker_compose/storages.yaml
 APP_CONTAINER = web-culture
 SERVICE_NAME = web
@@ -19,6 +20,13 @@ app-logs:
 app-logs-down:
 	@${DC} -f ${LOCAL_FILE} down
 
+.PHONY: obs
+obs:
+	@${DC} -f ${OBS_LOCAL_FILE} up
+
+.PHONY: obs-down
+obs-down:
+	@${DC} -f ${OBS_LOCAL_FILE} down
 
 # Создать фикстуры
 .PHONY: app-dump # make app-load path="fixtures/all_checklists_data_$(date +'%Y-%m-%d_%H:%M:%S').json"
