@@ -3,6 +3,10 @@ services:
     image: grafana/loki:3.6.10
     container_name: obs-loki
     user: "0:0"
+    restart: unless-stopped
+    stop_grace_period: 1m
+    networks:
+      - obs_network
     volumes:
       - ./observability/loki/config.yaml:/etc/loki/config.yaml
       - loki_data:/tmp/loki
@@ -11,53 +15,54 @@ services:
       resources:
         limits:
           memory: 800M
-    restart: unless-stopped
-    networks:
-      - obs_network
 
   promtail:
     image: grafana/promtail:3.6.10
     container_name: obs-promtail
+    restart: unless-stopped
+    networks:
+      - obs_network
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./observability/promtail/config.yaml:/etc/promtail/config.yaml
       - promtail_data:/opt/promtail
     command: ["-config.file=/etc/promtail/config.yaml"]
+    depends_on:
+      - loki
     deploy:
       resources:
         limits:
           memory: 256M
-    depends_on:
-      - loki
-    restart: unless-stopped
-    networks:
-      - obs_network
 
   grafana:
     image: grafana/grafana:11.6.9
     container_name: obs-grafana
+    restart: unless-stopped
     ports:
-      # ЭТО ЕДИНСТВЕННЫЙ ПОРТ, КОТОРЫЙ МЫ ОТКРЫВАЕМ НАРУЖУ
-      # (Можешь потом закрыть его Nginx'ом и повесить SSL)
       - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
+    networks:
+      - obs_network
 #    environment:
 #      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
     depends_on:
       - loki
+      - victoriametrics
+      - tempo
     deploy:
       resources:
         limits:
           memory: 512M
-    restart: unless-stopped
-    networks:
-      - obs_network
 
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.139.0
     container_name: obs-victoriametrics
+    restart: unless-stopped
+    stop_grace_period: 1m
+    networks:
+      - obs_network
     volumes:
       - vm_data:/victoria-metrics-data
       - ./observability/victoriametrics/prometheus.prod.yaml:/etc/prometheus/prometheus.prod.yaml
@@ -69,25 +74,28 @@ services:
       resources:
         limits:
           memory: 512M
-    restart: unless-stopped
-    networks:
-      - obs_network
 
   tempo:
     image: grafana/tempo:2.10.3
     container_name: obs-tempo
+    restart: unless-stopped
+    stop_grace_period: 1m
     user: "0:0"
-    command: [ "-config.file=/etc/tempo.yaml" ]
+    networks:
+      - obs_network
     volumes:
       - ./observability/tempo/config.yaml:/etc/tempo.yaml
       - tempo_data:/tmp/tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
     deploy:
       resources:
         limits:
           memory: 800M
-    restart: unless-stopped
-    networks:
-      - obs_network
+
+networks:
+  obs_network:
+    name: obs_network
+    driver: bridge
 
 volumes:
   loki_data:
@@ -95,8 +103,3 @@ volumes:
   grafana_data:
   vm_data:
   tempo_data:
-
-networks:
-  obs_network:
-    name: obs_network
-    driver: bridge

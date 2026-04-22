@@ -2,6 +2,17 @@ services:
   web:
     image: ${IMAGE}
     container_name: web-culture
+    restart: unless-stopped
+    stop_grace_period: 1m
+    networks:
+      - local
+      - web-public
+      - obs_network
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.prod
+      - OTEL_SERVICE_NAME=web-culture
     volumes:
       - ./static:/app/static
       - ./media:/app/media
@@ -34,16 +45,6 @@ services:
           memory: 1G
         reservations:
           memory: 512M
-    env_file:
-      - .env
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.prod
-      - OTEL_SERVICE_NAME=web-culture
-    restart: unless-stopped
-    networks:
-      - local
-      - web-public
-      - obs_network
     logging: &default-logging
       driver: "json-file"
       options:
@@ -53,10 +54,16 @@ services:
   db:
     image: postgres:17.3-alpine
     container_name: db-culture
+    restart: unless-stopped
+    stop_grace_period: 1m
+    networks:
+      - local
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       interval: 10s
@@ -66,16 +73,14 @@ services:
       resources:
         limits:
           memory: 1.5G
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - local
     logging: *default-logging
 
   redis:
     image: redis:8.2-alpine
     container_name: redis-culture
+    restart: unless-stopped
+    networks:
+      - local
     volumes:
       - redis_data:/data
     healthcheck:
@@ -87,15 +92,25 @@ services:
       resources:
         limits:
           memory: 512M
-    restart: unless-stopped
-    networks:
-      - local
     logging: *default-logging
 
   celery:
     image: ${IMAGE}
     container_name: celery-culture
+    restart: unless-stopped
     stop_grace_period: 1m
+    networks:
+      - local
+      - web-public
+      - obs_network
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.prod
+      - OTEL_SERVICE_NAME=web-culture
+    volumes:
+      - ./static:/app/static
+      - ./media:/app/media
     command: [
       "uv", "run", "--no-sync", "celery",
       "-A", "config", "worker",
@@ -104,70 +119,62 @@ services:
       "--hostname=worker@%h",
       "--prefetch-multiplier=1"
     ]
-    env_file:
-      - .env
-    environment:
-      - DJANGO_SETTINGS_MODULE=config.prod
-      - OTEL_SERVICE_NAME=web-culture
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "celery -A config inspect ping || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 1G
-    volumes:
-      - ./static:/app/static
-      - ./media:/app/media
-    restart: unless-stopped
-    networks:
-      - local
-      - web-public
-      - obs_network
     logging: *default-logging
 
   celery_beat:
     image: ${IMAGE}
     container_name: celery_beat-culture
-    command: [
-      "uv", "run", "--no-sync", "celery",
-      "-A", "config", "beat",
-      "--loglevel=info"
-    ]
+    restart: unless-stopped
+    networks:
+      - local
     env_file:
       - .env
     volumes:
       - ./static:/app/static
       - ./media:/app/media
+    command: [
+      "uv", "run", "--no-sync", "celery",
+      "-A", "config", "beat",
+      "--loglevel=info"
+    ]
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - local
     logging: *default-logging
 
   nginx:
     image: nginx:1.29-alpine
     container_name: nginx_proxy
+    restart: unless-stopped
     ports:
       - "80:80"
 #      - "443:443"
+    networks:
+      - web-public
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./static:/app/static:ro
       - ./media:/app/media:ro
-    restart: unless-stopped
     depends_on:
       web:
         condition: service_healthy
-    networks:
-      - web-public
     logging: *default-logging
 
 networks:
