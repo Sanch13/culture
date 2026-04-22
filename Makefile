@@ -8,7 +8,9 @@ LOCAL_FILE = docker-compose.local.yml
 OBS_LOCAL_FILE = docker-compose.obs.yaml
 STORAGES_FILE = docker_compose/storages.yaml
 APP_CONTAINER = web-culture
-SERVICE_NAME = web
+SERVICE_APP_NAME = web
+SERVICE_NGINX_NAME = nginx
+SERVICE_CELERY_NAME = celery
 IMAGE = miran2025/culture:0.2.0
 
 .PHONY: app-logs
@@ -19,6 +21,10 @@ app-logs:
 .PHONY: app-logs-down
 app-logs-down:
 	@${DC} -f ${LOCAL_FILE} down
+
+.PHONY: restart
+restart:
+	@${DC} -f ${LOCAL_FILE} restart ${SERVICE_APP_NAME} ${SERVICE_NGINX_NAME} ${SERVICE_CELERY_NAME}
 
 .PHONY: obs
 obs:
@@ -41,12 +47,12 @@ app-load:
 # Создать миграции
 .PHONY: local-migrations # make migrate app="users"
 local-migrations:
-	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py makemigrations "$(app)"
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_APP_NAME} python manage.py makemigrations "$(app)"
 
 # Применить миграции
 .PHONY: local-migrate
 local-migrate:
-	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_NAME} python manage.py migrate
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_APP_NAME} python manage.py migrate
 
 .PHONY: app-sync
 app-sync:
@@ -90,16 +96,16 @@ app-rebuild-new-image:
 
 .PHONY: migrations
 migrations:
-	@${DC} -f ${PROD_FILE} exec ${SERVICE_NAME} python manage.py makemigrations
+	@${DC} -f ${PROD_FILE} exec ${SERVICE_APP_NAME} python manage.py makemigrations
 
 .PHONY: migrate
 migrate:
-	@${DC} -f ${PROD_FILE} exec ${SERVICE_NAME} python manage.py migrate
+	@${DC} -f ${PROD_FILE} exec ${SERVICE_APP_NAME} python manage.py migrate
 
 .PHONY: wait-for-web
 wait-for-web:
 	@echo "Waiting for web container to be ready..."
-	@while ! ${DC} -f ${PROD_FILE} exec ${SERVICE_NAME} echo "ready" 2>/dev/null; do \
+	@while ! ${DC} -f ${PROD_FILE} exec ${SERVICE_APP_NAME} echo "ready" 2>/dev/null; do \
 		sleep 1; \
 	done
 	@sleep 2

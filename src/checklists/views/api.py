@@ -15,36 +15,55 @@ from checklists.tasks import send_email
 
 User = get_user_model()
 
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
 
 @employee_required
 @require_POST
 def upload_photo_ajax(request, item_id):
-    """
-    Принимает фото через AJAX, сохраняет и возвращает JSON с URL картинки.
-    """
-    # 1. Ищем пункт проверки (и проверяем, что это отчет текущего юзера)
     item = get_object_or_404(
         InspectionItem, id=item_id, inspection__inspector=request.user
     )
 
-    # 2. Получаем файлы
     photos = request.FILES.getlist("photos")
+    if not photos:
+        return JsonResponse(
+            {"status": "error", "message": "Файлы не найдены"}, status=400
+        )
+
     data = []
+    errors = []
 
     for photo in photos:
+        if photo.size is None or photo.size > MAX_UPLOAD_SIZE:
+            errors.append(f"Файл {photo.name} превышает 10 МБ.")
+            continue
+
         try:
-            # Сжимаем фото перед сохранением
+            # Сжимаем фото
             compressed_photo = compress_image(photo)
             vp = ViolationPhoto.objects.create(item=item, image=compressed_photo)
             data.append({"id": vp.id, "url": vp.image.url})
 
         except Exception as e:
-            # Если файл битый или не картинка - просто пропускаем (или логируем)
-            print(f"Error compressing image: {e}")
+            # Обработка ошибки конвертации (например, если загрузили видео с расширением .jpg)
+            print(f"Error compressing image {photo.name}: {e}")
+            errors.append(
+                f"Не удалось обработать файл {photo.name}. Возможно, он поврежден."
+            )
             continue
 
-    # 3. Возвращаем список загруженных фото
-    return JsonResponse({"status": "ok", "photos": data})
+    # Возвращаем ответ. Если часть загрузилась, а часть нет - сообщаем об этом.
+    response_data = {
+        "status": "ok" if data else "error",
+        "photos": data,
+    }
+    if errors:
+        response_data["errors"] = errors
+        if not data:
+            response_data["status"] = "error"  # Если вообще ничего не загрузилось
+
+    return JsonResponse(response_data)
 
 
 @employee_required

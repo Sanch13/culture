@@ -666,33 +666,56 @@
         const files = inputElement.files;
         if (files.length === 0) return;
 
-        // 1. ИЩЕМ ЭЛЕМЕНТЫ ИНТЕРФЕЙСА
+        // --- ПРЕДВАРИТЕЛЬНАЯ ПРОВЕРКА НА ФРОНТЕНДЕ ---
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 МБ
+        const formData = new FormData();
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            // Проверка: картинка ли это
+            if (!file.type.startsWith('image/')) {
+                alert(`Файл "${file.name}" не является изображением и не будет загружен.`);
+                inputElement.value = '';
+                return;
+            }
+
+            // Проверка: размер
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`Файл "${file.name}" слишком большой (более 10 МБ).`);
+                inputElement.value = '';
+                return;
+            }
+
+            formData.append('photos', file);
+        }
+        // ---------------------------------------------
+
+        // 1. Блок UI (спиннеры и кнопки)
         const btnGallery = document.getElementById(`btn_gallery_${itemId}`);
         const btnCamera = document.getElementById(`btn_camera_${itemId}`);
         const spinner = document.getElementById(`loading-spinner-${itemId}`);
 
-        // 2. БЛОКИРУЕМ КНОПКИ И ПОКАЗЫВАЕМ СПИННЕР
         if (btnGallery) btnGallery.classList.add('disabled-state');
         if (btnCamera) btnCamera.classList.add('disabled-state');
-        if (spinner) spinner.style.display = 'flex'; // Показываем спиннер
-
-        const formData = new FormData();
-        for (let i = 0; i < files.length; i++) {
-            formData.append('photos', files[i]);
-        }
+        if (spinner) spinner.style.display = 'flex';
 
         const url = `/api/upload-photo/${itemId}/`;
 
-        // 3. ОТПРАВЛЯЕМ ЗАПРОС
+        // 2. Отправка запроса
         fetch(url, { method: 'POST', headers: {'X-CSRFToken': csrftoken}, body: formData })
         .then(response => response.json())
         .then(data => {
+
+            // --- ВАШ ВНЕДРЕННЫЙ КОД ---
             if (data.status === 'ok') {
                 const container = document.getElementById(`photo-container-${itemId}`);
+
+                // Рендерим успешно загруженные фото
                 data.photos.forEach(photo => {
                     const html = `
                         <div class="position-relative photo-wrapper" id="photo-wrapper-${photo.id}">
-                            <a href="${photo.url}" data-fancybox="gallery-${itemId}" data-caption="Новое фото">
+                            <a href="${photo.url}" data-fancybox="gallery-${itemId}" data-caption="Фото нарушения">
                                 <img src="${photo.url}" style="height: 80px; width: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd;">
                             </a>
                             <button type="button" class="btn position-absolute top-0 end-0 m-1 p-0 rounded-circle bg-white shadow-sm d-flex justify-content-center align-items-center" style="width: 28px; height: 28px; opacity: 0.9;" onclick="deletePhoto(${photo.id}, ${itemId})">
@@ -702,24 +725,31 @@
                     container.insertAdjacentHTML('beforeend', html);
                 });
 
-                // Очищаем input (чтобы можно было выбрать тот же файл снова)
                 inputElement.value = '';
-
-                // Вызываем логику авто-переключения на "Несоответствие"
                 handleInteraction(itemId);
+
+                // Если фото загрузились, но были и ошибки (например, 1 фото ок, а 1 видео)
+                if (data.errors && data.errors.length > 0) {
+                    alert('Некоторые файлы не были загружены:\n' + data.errors.join('\n'));
+                }
             } else {
-                alert('Ошибка сервера при сохранении фото.');
+                // Если вообще ничего не загрузилось (status: "error")
+                const errorMsg = data.errors ? data.errors.join('\n') : 'Ошибка загрузки файлов.';
+                alert(errorMsg);
+                inputElement.value = ''; // очищаем инпут при ошибке
             }
+            // --- КОНЕЦ ВНЕДРЕННОГО КОДА ---
+
         })
         .catch(error => {
-            console.error('Ошибка сети:', error);
-            alert('Сбой сети при загрузке фото. Проверьте интернет.');
+            console.error('Ошибка fetch:', error);
+            alert('Сбой сети при отправке файла. Проверьте интернет.');
         })
         .finally(() => {
-            // 4. ГАРАНТИРОВАННАЯ РАЗБЛОКИРОВКА (Сработает всегда)
+            // 3. Восстановление UI
             if (btnGallery) btnGallery.classList.remove('disabled-state');
             if (btnCamera) btnCamera.classList.remove('disabled-state');
-            if (spinner) spinner.style.display = 'none'; // Прячем спиннер
+            if (spinner) spinner.style.display = 'none';
         });
     }
 

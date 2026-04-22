@@ -218,6 +218,9 @@
 - add structlog
 - setup observability
 - setup logging
+
+# 22-04-2026
+- fix upload only photo and fix size less 10 Mbytes
 -
 
 
