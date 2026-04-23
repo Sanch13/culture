@@ -1,5 +1,6 @@
 import calendar
 import datetime
+from pathlib import Path
 from itertools import groupby
 
 import holidays
@@ -1203,3 +1204,22 @@ def get_item_history_chain(item, max_depth=2):
             break  # Цепочка прервалась (или не было отчета, или было ОК)
 
     return history_chain
+
+
+def format_size(bytes_size):
+    """Конвертирует байты в человекочитаемый формат: 1024 → '1.00 KB'"""
+    if bytes_size is None:
+        return "0 B"
+
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.2f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.2f} PB"
+
+
+def get_file_extension(filename):
+    """Возвращает расширение файла в нижнем регистре без точки: 'photo.JPG' → 'jpg'"""
+    if not filename:
+        return "unknown"
+    return Path(filename).suffix.lower().lstrip(".") or "unknown"

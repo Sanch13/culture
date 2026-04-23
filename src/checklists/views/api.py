@@ -13,6 +13,7 @@ from checklists.models import (
 )
 from checklists.utils import compress_image
 from checklists.decorators import employee_required, admin_required
+from checklists.services import format_size, get_file_extension
 from checklists.tasks import send_email
 import structlog
 
@@ -50,7 +51,11 @@ def upload_photo_ajax(request, item_id):
     total_start = time.perf_counter()
 
     for photo in photos:
-        file_log = log.bind(file_name=photo.name, file_size=photo.size)
+        file_log = log.bind(
+            file_name=photo.name,
+            file_ext=get_file_extension(photo.name),
+            file_size=format_size(photo.size),
+        )
 
         if photo.size is None or photo.size > MAX_UPLOAD_SIZE:
             file_log.warning("upload_file_too_big - Фото превышает 10 МБ.")
@@ -63,7 +68,7 @@ def upload_photo_ajax(request, item_id):
                 vp = ViolationPhoto.objects.create(item=item, image=photo)
                 db_duration = time.perf_counter() - db_start
                 file_log.info(
-                    "file_processed - Фото обработано и сохранено в БД.",
+                    "file_processed - Фото сохранено в БД.",
                     db_duration=round(db_duration, 3),
                     size=photo.size,
                 )
@@ -78,7 +83,7 @@ def upload_photo_ajax(request, item_id):
                 file_log.info(
                     "file_compressed_and_saved - Фото сжато, обработано и сохранено в БД.",
                     comp_duration=round(comp_duration, 3),
-                    size=photo.size,
+                    size=format_size(photo.size),
                 )
 
             data.append({"id": vp.id, "url": vp.image.url})
