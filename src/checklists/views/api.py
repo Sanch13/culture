@@ -1,3 +1,5 @@
+import time
+
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.http import JsonResponse
@@ -12,46 +14,94 @@ from checklists.models import (
 from checklists.utils import compress_image
 from checklists.decorators import employee_required, admin_required
 from checklists.tasks import send_email
+import structlog
 
 User = get_user_model()
 
-MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+logger = structlog.get_logger(__name__)
 
 
 @employee_required
 @require_POST
 def upload_photo_ajax(request, item_id):
-    item = get_object_or_404(
-        InspectionItem, id=item_id, inspection__inspector=request.user
+    MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+    _1Mb = 1 * 1024 * 1024
+
+    log = logger.bind(
+        view="upload_photo_ajax - Вход в обработку",
+        user_id=request.user.id,
+        item_id=item_id,
     )
 
     photos = request.FILES.getlist("photos")
     if not photos:
+        log.warning("upload_no_photos - Нет фотографий к обработке")
         return JsonResponse(
             {"status": "error", "message": "Файлы не найдены"}, status=400
         )
 
+    log.info("upload_started - Старт обработки и сохранения фото", count=len(photos))
+
+    item = get_object_or_404(
+        InspectionItem, id=item_id, inspection__inspector=request.user
+    )
     data = []
     errors = []
+    total_start = time.perf_counter()
 
     for photo in photos:
+        file_log = log.bind(file_name=photo.name, file_size=photo.size)
+
         if photo.size is None or photo.size > MAX_UPLOAD_SIZE:
+            file_log.warning("upload_file_too_big - Фото превышает 10 МБ.")
             errors.append(f"Файл {photo.name} превышает 10 МБ.")
             continue
 
         try:
-            # Сжимаем фото
-            compressed_photo = compress_image(photo)
-            vp = ViolationPhoto.objects.create(item=item, image=compressed_photo)
+            if photo.size < _1Mb:
+                db_start = time.perf_counter()
+                vp = ViolationPhoto.objects.create(item=item, image=photo)
+                db_duration = time.perf_counter() - db_start
+                file_log.info(
+                    "file_processed - Фото обработано и сохранено в БД.",
+                    db_duration=round(db_duration, 3),
+                    size=photo.size,
+                )
+            else:
+                # Средний файл (1-10 МБ): фронтенд не сжал. Жмем сервером.
+                comp_start = time.perf_counter()
+                compressed_photo = compress_image(photo)  # Наш новый pyvips конвертер
+                comp_duration = time.perf_counter() - comp_start
+
+                vp = ViolationPhoto.objects.create(item=item, image=compressed_photo)
+
+                file_log.info(
+                    "file_compressed_and_saved - Фото сжато, обработано и сохранено в БД.",
+                    comp_duration=round(comp_duration, 3),
+                    size=photo.size,
+                )
+
             data.append({"id": vp.id, "url": vp.image.url})
 
         except Exception as e:
             # Обработка ошибки конвертации (например, если загрузили видео с расширением .jpg)
-            print(f"Error compressing image {photo.name}: {e}")
+            file_log.error(
+                "file_processing_failed - Ошибка обработки фотографии.",
+                error=str(e),
+                exc_info=True,
+            )
             errors.append(
                 f"Не удалось обработать файл {photo.name}. Возможно, он поврежден."
             )
             continue
+
+    total_duration = time.perf_counter() - total_start
+    log.info(
+        "upload_finished - Все фото обработаны и сохранены в БД.",
+        total_duration=round(total_duration, 3),
+        success_count=len(data),
+        error_count=len(errors),
+    )
 
     # Возвращаем ответ. Если часть загрузилась, а часть нет - сообщаем об этом.
     response_data = {

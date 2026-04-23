@@ -4,6 +4,13 @@
 # ==============================================================================
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libvips-dev \
+    libheif-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock /app/
@@ -21,6 +28,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Здесь мы собираем легкий образ для запуска приложения
 # ==============================================================================
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvips42 \
+    libvips-tools \
+    libheif1 \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

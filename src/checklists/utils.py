@@ -7,11 +7,11 @@ from email.message import Message
 from django.conf import settings
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
-from PIL import Image, ImageOps
+import pyvips
 import phonenumbers
-import pillow_heif
+import structlog
 
-pillow_heif.register_heif_opener()
+logger = structlog.get_logger(__name__)
 
 
 def is_privileged_user(user):
@@ -82,48 +82,76 @@ def get_data_information_about_department(department) -> tuple[str, str]:
     return manager_text, masters_block
 
 
-def compress_image(image, quality=80, max_width=1280):
-    output = BytesIO()
-
-    with Image.open(image) as img:
-        # --- 1. МАГИЯ EXIF (Ориентация) ---
-        # Эта функция читает EXIF тег Orientation и физически вращает изображение (на 90, 180, 270 градусов).
-        # Если тега нет (или это скриншот/android) — она ничего не делает и работает быстро.
-        try:
-            img = ImageOps.exif_transpose(img)
-        except Exception as e:
-            # На случай странных или поврежденных EXIF-данных просто игнорируем ошибку
-            print(f"Ошибка при чтении EXIF: {e}")
-
-        # --- 2. Конвертация цвета ---
-        if img.mode in ("RGBA", "LA"):
-            background = Image.new(img.mode[:-1], img.size, "#fff")
-            background.paste(img, img.split()[-1])
-            img_to_save = background
-        elif img.mode != "RGB":
-            img_to_save = img.convert("RGB")
-        else:
-            img_to_save = img.copy()
-
-        # --- 3. Ресайз ---
-        width, height = img_to_save.size
-        if width > max_width:
-            ratio = max_width / width
-            new_height = int(height * ratio)
-            img_to_save = img_to_save.resize(
-                (max_width, new_height), Image.Resampling.LANCZOS
-            )
-
-        # --- 4. Сохранение ---
-        img_to_save.save(output, format="WEBP", quality=quality, optimize=True)
-
-    output.seek(0)
-
-    # Безопасное формирование имени (замена спецсимволов)
-    # Чтобы избежать ошибок, если имя файла содержит пробелы или странные символы
-    safe_name = image.name.split("/")[-1].split("\\")[-1]
-    new_name = safe_name.rsplit(".", 1)[0] + ".webp"
-
-    return InMemoryUploadedFile(
-        output, "ImageField", new_name, "image/webp", sys.getsizeof(output), None
+def compress_image(image_file, quality=80, max_width=1280):
+    """
+    Сжатие и автоповорот изображения с помощью сверхбыстрой библиотеки pyvips.
+    """
+    log = logger.bind(
+        original_name=image_file.name,
+        target_quality=quality,
+        target_max_width=max_width,
     )
+    try:
+        log.info(
+            "start_image_compression - Старт сжатия изображения",
+            original_size_bytes=image_file.size,
+        )
+        # 1. Читаем картинку из переданного файла (Django InMemoryUploadedFile)
+        # image_file.read() возвращает байты.
+        image_bytes = image_file.read()
+
+        # Загружаем из буфера памяти.
+        # pyvips автоматически определит формат (JPEG, PNG, WEBP, HEIC)
+        img = pyvips.Image.new_from_buffer(image_bytes, "")
+
+        # 2. АВТОПОВОРОТ (EXIF Orientation)
+        # Эта команда мгновенно разворачивает фото так, как телефон его снял.
+        img = img.autorot()
+
+        # 3. РЕСАЙЗ
+        # pyvips делает это очень элегантно. Если ширина больше max_width, мы вычисляем коэффициент.
+        if img.width > max_width:
+            scale = max_width / img.width
+            log.info(
+                "resizing_image - Изменение размера изображения",
+                original_width=img.width,
+                new_width=max_width,
+                scale_factor=f"{scale:.2f}",
+            )
+            # Функция resize изменяет размер с интерполяцией (по умолчанию Lanczos3)
+            img = img.resize(scale)
+
+        # 4. СОХРАНЕНИЕ В WEBP
+        # pyvips может писать результат напрямую в строку (байты)
+        # Q=quality (качество). У WebP по умолчанию lossless=False, что нам и нужно.
+        buffer_out = img.write_to_buffer(".webp", Q=quality)
+
+        # 5. Возвращаем объект для Django
+        output = BytesIO(buffer_out)
+
+        log.info("compression_completed - Сжатие изображения успешно завершено")
+
+        # Безопасное формирование имени (убираем старое расширение, ставим .webp)
+        safe_name = image_file.name.split("/")[-1].split("\\")[-1]
+        new_name = safe_name.rsplit(".", 1)[0] + ".webp"
+
+        return InMemoryUploadedFile(
+            output, "ImageField", new_name, "image/webp", sys.getsizeof(output), None
+        )
+
+    except pyvips.Error as e:
+        log.error(
+            "pyvips_processing_error - Ошибка обработки изображения",
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stage="image_processing",
+        )
+        raise Exception(f"Ошибка обработки изображения (pyvips): {str(e)}")
+
+    except Exception as e:
+        log.exception(
+            "unexpected_compression_error - Непредвиденная ошибка при сжатии",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
+        raise Exception(f"Непредвиденная ошибка при сжатии: {str(e)}")

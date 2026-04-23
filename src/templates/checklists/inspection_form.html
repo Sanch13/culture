@@ -483,7 +483,8 @@
 </div>
 
 
-<!-- ПОДКЛЮЧЕНИЕ СКРИПТОВ BOOTSTRAP (ОБЯЗАТЕЛЬНО) -->
+<!-- ПОДКЛЮЧЕНИЕ СКРИПТОВ BOOTSTRAP (ОБЯЗАТЕЛЬНО) --><!-- В твоем шаблоне admin_cabinet.html -->
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
 <script>
@@ -662,36 +663,15 @@
         }).catch(error => console.error('Ошибка сети:', error));
     }
 
-    function uploadPhoto(inputElement, itemId) {
+    // Делаем функцию асинхронной
+    async function uploadPhoto(inputElement, itemId) {
         const files = inputElement.files;
         if (files.length === 0) return;
 
-        // --- ПРЕДВАРИТЕЛЬНАЯ ПРОВЕРКА НА ФРОНТЕНДЕ ---
-        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 МБ
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 МБ (для сырого файла)
         const formData = new FormData();
 
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-
-            // Проверка: картинка ли это
-            if (!file.type.startsWith('image/')) {
-                alert(`Файл "${file.name}" не является изображением и не будет загружен.`);
-                inputElement.value = '';
-                return;
-            }
-
-            // Проверка: размер
-            if (file.size > MAX_FILE_SIZE) {
-                alert(`Файл "${file.name}" слишком большой (более 10 МБ).`);
-                inputElement.value = '';
-                return;
-            }
-
-            formData.append('photos', file);
-        }
-        // ---------------------------------------------
-
-        // 1. Блок UI (спиннеры и кнопки)
+        // 1. Блок UI (Сразу блокируем кнопки и крутим спиннер, так как сжатие займет время)
         const btnGallery = document.getElementById(`btn_gallery_${itemId}`);
         const btnCamera = document.getElementById(`btn_camera_${itemId}`);
         const spinner = document.getElementById(`loading-spinner-${itemId}`);
@@ -700,18 +680,69 @@
         if (btnCamera) btnCamera.classList.add('disabled-state');
         if (spinner) spinner.style.display = 'flex';
 
+        // 2. Настройки сжатия для библиотеки
+        const compressionOptions = {
+            maxSizeMB: 0.8,          // Целимся в вес менее 1 МБ
+            maxWidthOrHeight: 1280,  // Максимальная сторона 1280px
+            useWebWorker: true,      // Использовать фоновый поток браузера (чтобы не вис интерфейс)
+            fileType: 'image/webp'   // Пытаемся сразу сделать WebP на фронте
+        };
+
+        // 3. Асинхронно обрабатываем каждый файл
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            if (!file.type.startsWith('image/')) {
+                alert(`Файл "${file.name}" не является изображением и не будет загружен.`);
+                continue;
+            }
+
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`Файл "${file.name}" слишком большой (более 10 МБ).`);
+                continue;
+            }
+
+            try {
+
+                // СЖИМАЕМ ФАЙЛ ПРЯМО В БРАУЗЕРЕ
+                const compressedBlob = await imageCompression(file, compressionOptions);
+
+                // Меняем расширение в имени файла на .webp (если библиотека успешно сжала в webp)
+                const newName = file.name.replace(/\.[^/.]+$/, ".webp");
+
+                // Создаем новый File из Blob'а
+                const compressedFile = new File([compressedBlob], newName, {
+                    type: compressedBlob.type,
+                    lastModified: Date.now()
+                });
+
+                formData.append('photos', compressedFile);
+
+            } catch (error) {
+                console.warn('Ошибка сжатия на фронтенде, отправляем оригинал:', error);
+                // Если сжатие упало (например, старый браузер), отправляем как есть, бэкенд разберется
+                formData.append('photos', file);
+            }
+        }
+
+        // Если не осталось валидных файлов для отправки - выходим
+        if (!formData.has('photos')) {
+            if (btnGallery) btnGallery.classList.remove('disabled-state');
+            if (btnCamera) btnCamera.classList.remove('disabled-state');
+            if (spinner) spinner.style.display = 'none';
+            inputElement.value = '';
+            return;
+        }
+
         const url = `/api/upload-photo/${itemId}/`;
 
-        // 2. Отправка запроса
+        // 4. Отправка запроса (остается твоей)
         fetch(url, { method: 'POST', headers: {'X-CSRFToken': csrftoken}, body: formData })
         .then(response => response.json())
         .then(data => {
-
-            // --- ВАШ ВНЕДРЕННЫЙ КОД ---
             if (data.status === 'ok') {
                 const container = document.getElementById(`photo-container-${itemId}`);
 
-                // Рендерим успешно загруженные фото
                 data.photos.forEach(photo => {
                     const html = `
                         <div class="position-relative photo-wrapper" id="photo-wrapper-${photo.id}">
@@ -728,25 +759,20 @@
                 inputElement.value = '';
                 handleInteraction(itemId);
 
-                // Если фото загрузились, но были и ошибки (например, 1 фото ок, а 1 видео)
                 if (data.errors && data.errors.length > 0) {
                     alert('Некоторые файлы не были загружены:\n' + data.errors.join('\n'));
                 }
             } else {
-                // Если вообще ничего не загрузилось (status: "error")
                 const errorMsg = data.errors ? data.errors.join('\n') : 'Ошибка загрузки файлов.';
                 alert(errorMsg);
-                inputElement.value = ''; // очищаем инпут при ошибке
+                inputElement.value = '';
             }
-            // --- КОНЕЦ ВНЕДРЕННОГО КОДА ---
-
         })
         .catch(error => {
             console.error('Ошибка fetch:', error);
-            alert('Сбой сети при отправке файла. Проверьте интернет.');
+            alert('Сбой сети при отправке файла. Проверьте интернет. Возможно превышен допустимый размер запроса');
         })
         .finally(() => {
-            // 3. Восстановление UI
             if (btnGallery) btnGallery.classList.remove('disabled-state');
             if (btnCamera) btnCamera.classList.remove('disabled-state');
             if (spinner) spinner.style.display = 'none';

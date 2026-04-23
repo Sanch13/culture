@@ -4,6 +4,13 @@
 # ==============================================================================
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libvips-dev \
+    libheif-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV UV_COMPILE_BYTECODE=1
 
 WORKDIR /app
@@ -23,6 +30,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Здесь мы собираем легкий образ для запуска приложения
 # ==============================================================================
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+# Установка системных библиотек ДЛЯ РАБОТЫ приложения
+# Здесь ставим обычные пакеты (без -dev), чтобы не тянуть в прод компиляторы
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvips42 \
+    libvips-tools \
+    libheif1 \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

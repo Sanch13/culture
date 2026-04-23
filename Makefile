@@ -11,7 +11,7 @@ APP_CONTAINER = web-culture
 SERVICE_APP_NAME = web
 SERVICE_NGINX_NAME = nginx
 SERVICE_CELERY_NAME = celery
-IMAGE = miran2025/culture:0.2.0
+IMAGE = miran2025/culture:0.2.1
 
 .PHONY: app-logs
 app-logs:
@@ -28,7 +28,7 @@ restart:
 
 .PHONY: obs
 obs:
-	@${DC} -f ${OBS_LOCAL_FILE} up
+	@${DC} -f ${OBS_LOCAL_FILE} up -d
 
 .PHONY: obs-down
 obs-down:
