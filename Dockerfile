@@ -18,6 +18,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock /app/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_HTTP_TIMEOUT=60 \
     uv sync --frozen --no-dev --no-install-project
 
 COPY . .
