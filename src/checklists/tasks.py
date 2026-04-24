@@ -10,7 +10,7 @@ from celery import shared_task
 
 from checklists.models import Inspection
 from checklists.utils import send_message
-from checklists.services import (
+from checklists.services.services import (
     generate_schedule,
     prepare_daily_notifications,
     get_swap_notification_data,

@@ -1,0 +1,306 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Аналитика Нарушений{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
+    <style>
+        .fancybox__container { --f-bg: rgba(0, 0, 0, 0.85); }
+        .chronic-card { border-left: 5px solid #dc3545; }
+        .repeated-card { border-left: 5px solid #fd7e14; }
+        .single-card { border-left: 5px solid #ffc107; }
+        /* Анимация стрелочки для аккордеона */
+        .transition-transform {
+            transition: transform 0.3s ease;
+        }
+        button[aria-expanded="true"] .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+
+        /* Стили для кнопки-заголовка, чтобы она выглядела солидно */
+        button[data-bs-toggle="collapse"] {
+            background-color: #ffffff;
+        }
+        button[data-bs-toggle="collapse"]:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">🚨 Детализация нарушений</h1>
+</div>
+
+<!-- БЛОК ФИЛЬТРОВ -->
+<div class="card shadow-sm mb-4 border-0 bg-light">
+    <div class="card-body">
+        <form id="filterForm" class="row g-3 align-items-end">
+
+            <!-- Выбор участка -->
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Участок:</label>
+                <select name="location_id" id="locationSelect" class="form-select">
+                    <option value="all">Все участки предприятия</option>
+
+                    {% for loc in locations %}
+                        <option value="{{ loc.id }}">{{ loc.name }}</option>
+                    {% endfor %}
+                    <!-- НОВЫЙ ПУНКТ (Выделен стилем) -->
+                    <option value="b1_only">Ответственность ЭМО на других участках (B1)</option>
+
+                </select>
+            </div>
+
+            <!-- Дата С -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Период с:</label>
+                <input type="date" name="start_date" id="startDate" class="form-control" value="{{ default_start }}">
+            </div>
+
+            <!-- Дата ПО -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">по:</label>
+                <input type="date" name="end_date" id="endDate" class="form-control" value="{{ default_end }}">
+            </div>
+
+            <!-- Кнопка -->
+            <div class="col-md-2 text-end">
+                <button type="submit" class="btn btn-primary w-100" id="btnGenerate">
+                    <i class="bi bi-search"></i> Сформировать
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- СПИННЕР ЗАГРУЗКИ (Скрыт) -->
+<div id="loadingSpinner" class="text-center py-5" style="display: none;">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+    <h5 class="mt-3 text-muted">Сбор данных...</h5>
+</div>
+
+<!-- КОНТЕЙНЕР ДЛЯ РЕЗУЛЬТАТОВ -->
+<div id="reportContainer">
+    <!-- Сюда JS вставит HTML -->
+    <div class="alert alert-info text-center p-5 shadow-sm bg-white border-0">
+        <i class="bi bi-funnel fs-1 text-muted"></i>
+        <h4 class="mt-3">Укажите параметры и нажмите "Сформировать"</h4>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
+<script>
+    Fancybox.bind("[data-fancybox]", { loop: true });
+
+    document.getElementById('filterForm').addEventListener('submit', function(e) {
+        e.preventDefault(); // Останавливаем перезагрузку страницы
+
+        const btn = document.getElementById('btnGenerate');
+        const spinner = document.getElementById('loadingSpinner');
+        const container = document.getElementById('reportContainer');
+
+        const locId = document.getElementById('locationSelect').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+
+        // Блокируем кнопку и показываем спиннер
+        btn.disabled = true;
+        container.innerHTML = '';
+        spinner.style.display = 'block';
+
+        // Отправляем AJAX запрос
+        fetch(`/api/analytics/violations/?location_id=${locId}&start_date=${startDate}&end_date=${endDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    renderReport(data.report);
+                } else {
+                    container.innerHTML = `<div class="alert alert-danger">Ошибка: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                container.innerHTML = `<div class="alert alert-danger">Сбой сети: ${error}</div>`;
+            })
+            .finally(() => {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            });
+    });
+
+    // Функция отрисовки JSON в HTML (С Аккордеоном)
+    function renderReport(report) {
+        const container = document.getElementById('reportContainer');
+
+        const totalViolations = report.chronic.count + report.repeated.count + report.single.count;
+        if (totalViolations === 0) {
+            container.innerHTML = `
+                <div class="alert alert-success text-center p-5 shadow-sm bg-white border-0">
+                    <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+                    <h4 class="mt-3">Нарушений не найдено</h4>
+                    <p class="text-muted">За выбранный период на данном участке всё идеально.</p>
+                </div>`;
+            return;
+        }
+
+        let html = '';
+
+        // Вспомогательная функция для создания сворачиваемого блока
+        function createAccordionSection(id, title, icon, colorClass, count, items, cardClass) {
+            if (count === 0) return '';
+
+            // Генерируем HTML для секции
+            return `
+            <div class="mb-4">
+                <!-- Кликабельный заголовок -->
+                <button class="btn btn-light w-100 text-start d-flex justify-content-between align-items-center shadow-sm py-3 border-0"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapse-${id}"
+                        aria-expanded="false"
+                        aria-controls="collapse-${id}">
+                    <span class="${colorClass} fs-5 fw-bold">
+                        <i class="${icon} me-2"></i> ${title} (${count})
+                    </span>
+                    <i class="bi bi-chevron-down text-muted transition-transform"></i>
+                </button>
+
+                <!-- Контент (Карточки). По умолчанию скрыт (без класса 'show') -->
+                <div class="collapse mt-3" id="collapse-${id}">
+                    ${renderItems(items, cardClass)}
+                </div>
+            </div>`;
+        }
+
+        // 1. Рендерим ХРОНИЧЕСКИЕ (Двойной повтор)
+        html += createAccordionSection(
+            'chronic',
+            'Хронические проблемы',
+            'bi-x-octagon-fill',
+            'text-danger',
+            report.chronic.count,
+            report.chronic.items,
+            'chronic-card'
+        );
+
+        // 2. Рендерим ПОВТОРНЫЕ
+        html += createAccordionSection(
+            'repeated',
+            'Повторные нарушения',
+            'bi-exclamation-triangle-fill',
+            'text-warning',
+            report.repeated.count,
+            report.repeated.items,
+            'repeated-card'
+        );
+
+        // 3. Рендерим ОДИНАРНЫЕ
+        html += createAccordionSection(
+            'single',
+            'Одинарные нарушения',
+            'bi-info-circle-fill',
+            'text-secondary',
+            report.single.count,
+            report.single.items,
+            'single-card'
+        );
+
+        container.innerHTML = html;
+    }
+
+    // Вспомогательная функция для отрисовки карточек
+    function renderItems(items, cardClass) {
+        let html = '<div class="row row-cols-1 g-3">';
+
+        items.forEach(item => {
+
+            // --- 1. ТЕКУЩИЕ ФОТОГРАФИИ ---
+            let currentPhotosHtml = '';
+            if (item.photos && item.photos.length > 0) {
+                currentPhotosHtml = '<div class="d-flex flex-wrap gap-2 mt-2">';
+                item.photos.forEach(url => {
+                    currentPhotosHtml += `<a href="${url}" data-fancybox="current-${item.id}">
+                                            <img src="${url}" class="rounded border shadow-sm" style="width: 70px; height: 70px; object-fit: cover;">
+                                          </a>`;
+                });
+                currentPhotosHtml += '</div>';
+            }
+
+            // --- 2. ИСТОРИЯ ПРОБЛЕМЫ ---
+            let historyHtml = '';
+            if (item.history && item.history.length > 0) {
+                historyHtml = '<div class="mt-3 pt-3 border-top">';
+                historyHtml += '<div class="text-muted small text-uppercase fw-bold mb-2">История проблемы:</div>';
+
+                item.history.forEach((h, i) => {
+                    let pastPhotosHtml = '';
+                    if (h.photos && h.photos.length > 0) {
+                        pastPhotosHtml = '<div class="d-flex flex-wrap gap-1 mt-1">';
+                        h.photos.forEach(url => {
+                            pastPhotosHtml += `<a href="${url}" data-fancybox="history-${item.id}-${i}">
+                                                <img src="${url}" class="rounded border border-secondary" style="width: 50px; height: 50px; object-fit: cover; opacity: 0.8;">
+                                               </a>`;
+                        });
+                        pastPhotosHtml += '</div>';
+                    }
+
+                    // БЛОК ИСТОРИИ (Дата + ФИО)
+                    historyHtml += `
+                        <div class="mb-2 p-2 bg-light border-start border-warning border-3 rounded">
+                            <div class="small fw-bold text-dark mb-1">
+                                Было нарушение: <span class="text-danger">${h.date}</span> <span class="text-muted fw-bold">Аудитор (${h.inspector})</span>
+                            </div>
+                            <div class="small text-muted fst-italic">
+                                "${h.comment || 'Без комментария'}"
+                            </div>
+                            ${pastPhotosHtml}
+                        </div>
+                    `;
+                });
+                historyHtml += '</div>';
+            }
+
+            // --- 3. СБОРКА КАРТОЧКИ ---
+            html += `
+                <div class="col">
+                    <div class="card shadow-sm border-0 ${cardClass}">
+                        <div class="card-body py-3">
+                            <!-- Шапка: Участок -->
+                            <div class="d-flex justify-content-between text-muted small mb-2 border-bottom pb-2">
+                                <span><i class="bi bi-geo-alt-fill text-primary"></i> <strong>${item.location_name}</strong></span>
+                            </div>
+
+                            <!-- Название РАЗДЕЛА (Жирным, заглавными) и ПУНКТА -->
+                            <h6 class="fw-bold mb-3 text-dark lh-base">
+                                <span class="text-uppercase text-miran">${item.section}</span><br>
+                                <span class="fw-bold">${item.criteria}</span>
+                            </h6>
+
+                            <!-- ТЕКУЩЕЕ НАРУШЕНИЕ (Дата, ФИО, Коммент) -->
+                            <div class="text-dark bg-danger bg-opacity-10 p-2 rounded w-100 border border-danger-subtle">
+                                <div class="small fw-bold text-dark mb-1">
+                                    Текущее: <span class="text-danger">${item.date}</span> <span class="text-muted fw-bold">Аудитор (${item.inspector})</span>
+                                </div>
+                                <div class="small">
+                                    "${item.comment || 'Без комментария'}"
+                                </div>
+                            </div>
+
+                            <!-- Текущие фото -->
+                            ${currentPhotosHtml}
+
+                            <!-- Блок Истории -->
+                            ${historyHtml}
+                        </div>
+                    </div>
+                </div>`;
+        });
+
+        html += '</div>';
+        return html;
+    }
+</script>
+{% endblock %}

@@ -63,6 +63,13 @@
                     </a>
                 </li>
 
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'management_violations_report_page' %}active{% endif %}"
+                       href="{% url 'management_violations_report_page' %}">
+                        Анализ нарушений
+                    </a>
+                </li>
+
 
                 {% endif %}
 

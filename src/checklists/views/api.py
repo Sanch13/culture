@@ -1,5 +1,7 @@
 import time
 
+from datetime import timedelta
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.http import JsonResponse
@@ -13,7 +15,8 @@ from checklists.models import (
 )
 from checklists.utils import compress_image
 from checklists.decorators import employee_required, admin_required
-from checklists.services import format_size, get_file_extension
+from checklists.services.services import format_size, get_file_extension
+from checklists.services.service_analytics import get_violations_report_data
 from checklists.tasks import send_email
 import structlog
 
@@ -254,3 +257,31 @@ def save_repeated_ajax(request, item_id):
 
     item.save()
     return JsonResponse({"status": "ok"})
+
+
+@employee_required
+@require_GET
+def api_get_violations_report(request):
+    location_id = request.GET.get("location_id")  # Может быть пуст, 'all', или ID
+
+    # Получаем даты из запроса
+    start_date_str = request.GET.get("start_date")
+    end_date_str = request.GET.get("end_date")
+
+    # Дефолтные значения (Последние 7 дней)
+    today = timezone.now().date()
+
+    if not end_date_str:
+        end_date_str = today.strftime("%Y-%m-%d")
+
+    if not start_date_str:
+        start_date = today - timedelta(days=7)
+        start_date_str = start_date.strftime("%Y-%m-%d")
+
+    try:
+        report_data = get_violations_report_data(
+            start_date_str, end_date_str, location_id
+        )
+        return JsonResponse({"status": "ok", "report": report_data})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

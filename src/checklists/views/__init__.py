@@ -11,6 +11,7 @@ from checklists.views.admin_cabinet import (
     admin_swap_log,
     admin_exchange_shifts,
     admin_analytics_dashboard,
+    admin_violations_report_page,
 )
 from checklists.views.employee_cabinet import (
     employee_dashboard,
@@ -20,6 +21,7 @@ from checklists.views.employee_cabinet import (
     management_reports_list,
     management_inspection_detail,
     management_analytics_dashboard,
+    management_violations_report_page,
 )
 from checklists.views.api import (
     upload_photo_ajax,
@@ -29,6 +31,7 @@ from checklists.views.api import (
     toggle_employee_permission,
     api_get_swap_candidates,
     save_repeated_ajax,
+    api_get_violations_report,
 )
 
 __all__ = (
@@ -44,6 +47,7 @@ __all__ = (
     "admin_swap_log",
     "admin_exchange_shifts",
     "admin_analytics_dashboard",
+    "admin_violations_report_page",
     "employee_dashboard",
     "inspection_form_view",
     "start_inspection_view",
@@ -51,6 +55,7 @@ __all__ = (
     "management_reports_list",
     "management_inspection_detail",
     "management_analytics_dashboard",
+    "management_violations_report_page",
     "upload_photo_ajax",
     "delete_photo_ajax",
     "save_comment_ajax",
@@ -58,4 +63,5 @@ __all__ = (
     "toggle_employee_permission",
     "api_get_swap_candidates",
     "save_repeated_ajax",
+    "api_get_violations_report",
 )

@@ -26,9 +26,18 @@ urlpatterns = [
         name="admin_exchange_shifts",
     ),
     path("cabinet/analytics/", views.admin_analytics_dashboard, name="admin_analytics"),
+    path(
+        "cabinet/management/violations/",
+        views.admin_violations_report_page,
+        name="admin_management_violations",
+    ),
+    # =====================
     # Предпросмотр конкретного шаблона
+    # =====================
     path("preview/<int:template_id>/", views.template_preview, name="template_preview"),
+    # =====================
     # Кабинет пользователя
+    # =====================
     path("my-checks/", views.employee_dashboard, name="employee_dashboard"),
     path(
         "start/<int:template_id>/", views.start_inspection_view, name="start_inspection"
@@ -51,7 +60,14 @@ urlpatterns = [
         views.management_analytics_dashboard,
         name="management_analytics",
     ),
+    path(
+        "management/violations/",
+        views.management_violations_report_page,
+        name="management_violations_report_page",
+    ),
+    # =====================
     # API
+    # =====================
     path(
         "api/upload-photo/<int:item_id>/",
         views.upload_photo_ajax,
@@ -87,5 +103,10 @@ urlpatterns = [
         "api/save-repeated/<int:item_id>/",
         views.save_repeated_ajax,
         name="save_repeated_ajax",
+    ),
+    path(
+        "api/analytics/violations/",
+        views.api_get_violations_report,
+        name="api_violations_report",
     ),
 ]

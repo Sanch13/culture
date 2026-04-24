@@ -13,7 +13,7 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 
 from checklists.decorators import admin_required
-from checklists.services import (
+from checklists.services.services import (
     generate_schedule,
     apply_inspection_filters_and_paginate,
     analytics_dashboard,
@@ -25,6 +25,7 @@ from checklists.models import (
     Schedule,
     SwapLog,
     InspectionRoute,
+    Location,
 )
 from checklists.tasks import notify_user_about_swap
 
@@ -365,6 +366,8 @@ def admin_employees_list(request):
 
     count_workers = active_users.filter(role=User.ROLE_WORKER).count()
 
+    count_auditors = active_users.filter(can_perform_inspections=True).count()
+
     count_admins = active_users.filter(role=User.ROLE_ADMIN).count()
 
     # Менеджмент - это все остальные
@@ -379,6 +382,7 @@ def admin_employees_list(request):
         # Передаем статистику в шаблон
         "total_active": total_active,
         "count_workers": count_workers,
+        "count_auditors": count_auditors,
         "count_management": count_management,
         "count_admins": count_admins,
     }
@@ -487,3 +491,23 @@ def admin_analytics_dashboard(request):
     context = analytics_dashboard(today, year, month)
 
     return render(request, "checklists/admin_analytics.html", context)
+
+
+@admin_required
+def admin_violations_report_page(request):
+    """
+    Страница для просмотра детализированного отчета по нарушениям.
+    """
+    # Передаем участки для селекта
+    locations = Location.objects.all().order_by("name")
+
+    # Дефолтные даты для полей ввода (чтобы они не были пустыми визуально)
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+
+    context = {
+        "locations": locations,
+        "default_start": week_ago.strftime("%Y-%m-%d"),
+        "default_end": today.strftime("%Y-%m-%d"),
+    }
+    return render(request, "checklists/management_violations_report.html", context)

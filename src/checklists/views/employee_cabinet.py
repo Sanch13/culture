@@ -12,9 +12,10 @@ from checklists.models import (
     Inspection,
     ViolationPhoto,
     Schedule,
+    Location,
 )
 from checklists.decorators import employee_required, management_required
-from checklists.services import (
+from checklists.services.services import (
     create_inspection_from_template,
     perform_auto_swap,
     apply_inspection_filters_and_paginate,
@@ -342,6 +343,24 @@ def auto_swap_shift(request, schedule_id):
         messages.error(request, message)
 
     return redirect("employee_dashboard")
+
+
+@management_required
+def management_violations_report_page(request):
+    """
+    Страница для просмотра детализированного отчета по нарушениям.
+    """
+    locations = Location.objects.all().order_by("name")
+
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+
+    context = {
+        "locations": locations,
+        "default_start": week_ago.strftime("%Y-%m-%d"),
+        "default_end": today.strftime("%Y-%m-%d"),
+    }
+    return render(request, "checklists/management_violations_report.html", context)
 
 
 @management_required
