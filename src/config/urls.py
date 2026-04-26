@@ -6,12 +6,22 @@ from django.shortcuts import render
 from django.conf import settings
 from django.conf.urls.static import static
 
+import structlog
+
+logger = structlog.get_logger(__name__)
+
 
 def custom_404(request, exception=None):
+    logger.warning(
+        "page_not_found",
+        path=request.path,
+        referer=request.META.get("HTTP_REFERER", ""),
+    )
     return render(request, "404.html", status=404)
 
 
 def custom_500(request):
+    logger.error("internal_server_error_handler")
     return render(request, "500.html", status=500)
 
 

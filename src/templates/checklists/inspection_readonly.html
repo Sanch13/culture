@@ -60,9 +60,33 @@
                         <div class="flex-grow-1">
                             <div class="fw-medium mb-2">{{ item.criteria_text }}</div>
 
+                            <!-- ТЕКУЩИЙ КОММЕНТАРИЙ -->
+                            {% if item.comment %}
+                                <div class="alert alert-warning py-1 px-2 d-inline-block mb-2 small w-100">
+                                    <strong>Нарушение: {{ item.inspection.date_check|date:"d.m.Y" }}</strong>
+                                    <div class="text-muted fst-italic">
+                                        "{{ item.comment }}"
+                                    </div>
+
+
+                                </div>
+                            {% endif %}
+
+                            <!-- ТЕКУЩИЕ ФОТОГРАФИИ -->
+                            {% if item.photos.all %}
+                                <div class="d-flex flex-wrap gap-2 mt-2 mb-3">
+                                    {% for photo in item.photos.all %}
+                                        <!-- Галерея Fancybox (группируем по ID текущего пункта) -->
+                                        <a href="{{ photo.image.url }}" data-fancybox="gallery-{{ item.id }}" data-caption="Текущее нарушение">
+                                            <img src="{{ photo.image.url }}" class="rounded border bg-white shadow-sm" style="width: 100px; height: 100px; object-fit: cover;">
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+
                             <!-- === БЛОК ИСТОРИИ (ВЧЕРА И ПОЗАВЧЕРА) === -->
                             {% if item.history_chain %}
-                                <div class="mb-3">
+                                <div class="mb-1">
                                     {% for past_item in item.history_chain %}
                                         <!-- Карточка старого нарушения -->
                                         <div class="history-card p-2 mb-2 shadow-sm rounded border">
@@ -91,25 +115,6 @@
                                 </div>
                             {% endif %}
                             <!-- ======================================= -->
-
-                            <!-- ТЕКУЩИЙ КОММЕНТАРИЙ -->
-                            {% if item.comment %}
-                                <div class="alert alert-warning py-1 px-2 d-inline-block mb-2 small w-100">
-                                    <strong>Сегодня:</strong> {{ item.comment }}
-                                </div>
-                            {% endif %}
-
-                            <!-- ТЕКУЩИЕ ФОТОГРАФИИ -->
-                            {% if item.photos.all %}
-                                <div class="d-flex flex-wrap gap-2 mt-2">
-                                    {% for photo in item.photos.all %}
-                                        <!-- Галерея Fancybox (группируем по ID текущего пункта) -->
-                                        <a href="{{ photo.image.url }}" data-fancybox="gallery-{{ item.id }}" data-caption="Текущее нарушение">
-                                            <img src="{{ photo.image.url }}" class="rounded border bg-white shadow-sm" style="width: 100px; height: 100px; object-fit: cover;">
-                                        </a>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
 
                         </div>
 
