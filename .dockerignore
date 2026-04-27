@@ -22,12 +22,13 @@ logs/
 
 # Media
 media/
-nginx
+nginx/
 # Static
 static/
-fixtures
+fixtures/
 
 observability/
+docs/
 
 # Private keys and certificates
 *.pem

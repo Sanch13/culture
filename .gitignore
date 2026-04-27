@@ -17,10 +17,10 @@ env.bak/
 venv.bak/
 
 # projects files
-logs
-fixtures
-media
-static
+logs/
+fixtures/
+media/
+static/
 
 # pyenv
 .python-version
