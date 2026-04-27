@@ -25,7 +25,8 @@ app.conf.beat_schedule = {
     # Задача 1: Генерация расписания. Запуск каждую пятницу в 14:20
     "generate-schedule-every-friday": {
         "task": "checklists.tasks.task_generate_weekly_schedule",
-        "schedule": crontab(day_of_week="friday", hour=14, minute=20),
+        # "schedule": crontab(day_of_week="friday", hour=11, minute=00),
+        "schedule": crontab(day_of_week="*", hour=9, minute=00),
     },
     # Задача 2: Отправка email админу
     # 'send_admin_email': {
@@ -35,12 +36,13 @@ app.conf.beat_schedule = {
     # Задача 3: Ежедневная отправка email с напоминанием о проверке (9 утра)
     "send_inspection_reminders": {
         "task": "checklists.tasks.send_inspection_reminders",
-        "schedule": crontab(hour=9, minute=0, day_of_week="*"),
+        "schedule": crontab(day_of_week="*", hour=9, minute=0),
     },
-    # Задача 4: Отправка email (в Пт 14:30) всем проверяющим на след. неделе
+    # Задача 4: Отправка email (в Пт 11:20) всем проверяющим на след. неделе
     "send-weekly-digest-friday": {
         "task": "checklists.tasks.send_weekly_schedule_digest",
-        "schedule": crontab(day_of_week="friday", hour=14, minute=30),
+        # "schedule": crontab(day_of_week="friday", hour=11, minute=20),
+        "schedule": crontab(day_of_week="*", hour=10, minute=20),
     },
     # Задача 5: Напоминание в пн (09:00) всем проверяющим на этой неделе с вт
     "send-monday-reminders": {

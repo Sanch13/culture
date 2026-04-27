@@ -40,9 +40,9 @@ def task_generate_weekly_schedule():
     days_until_monday = 7 - today.weekday()
     next_monday = today + timedelta(days=days_until_monday)
 
-    # Генерируем на 14 дней вперед (с запасом)
+    # Генерируем на 21 дней вперед (с запасом)
     # Функция безопасна: если на понедельник уже есть запись, она её не перезапишет.
-    result = generate_schedule(start_date=next_monday, days_count=14)
+    result = generate_schedule(start_date=next_monday, days_count=21)
 
     return f"Auto-generation report: {result}"
 

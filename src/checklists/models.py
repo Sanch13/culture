@@ -463,3 +463,15 @@ class CalendarOverride(models.Model):
         ordering = ["-date"]
         verbose_name = "Исключение календаря (Перенос)"
         verbose_name_plural = "Справочник: Календарь (Переносы)"
+
+
+class ScheduleGeneratorState(models.Model):
+    """
+    Хранит ID пользователя, на котором остановился генератор.
+    Гарантирует стабильную очередь, независимую от обмена сменами.
+    """
+
+    last_user_id = models.IntegerField("ID последнего сотрудника", default=0)
+
+    class Meta:
+        verbose_name = "Состояние генератора"

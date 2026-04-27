@@ -96,7 +96,7 @@ class User(AbstractUser):
         return name
 
     def __str__(self):
-        return f"{self.get_full_name()} <{self.email}>"
+        return f"[{self.id}] {self.get_full_name()} <{self.email}>"
 
 
 class UserAbsence(models.Model):

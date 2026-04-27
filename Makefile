@@ -11,7 +11,7 @@ APP_CONTAINER = web-culture
 SERVICE_APP_NAME = web
 SERVICE_NGINX_NAME = nginx
 SERVICE_CELERY_NAME = celery
-IMAGE = miran2025/culture:0.2.1
+IMAGE = miran2025/culture:0.2.2
 
 .PHONY: app-logs
 app-logs:

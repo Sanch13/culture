@@ -4,6 +4,7 @@ from pathlib import Path
 from itertools import groupby
 
 import holidays
+import structlog
 
 from django.db import transaction
 from django.contrib.auth import get_user_model
@@ -21,44 +22,91 @@ from checklists.models import (
     InspectionSectionScore,
     LocationDailyScore,
     CalendarOverride,
+    ScheduleGeneratorState,
 )
 from checklists.utils import format_phone_number
 
 User = get_user_model()
+logger = structlog.get_logger(__name__)
 
 
-def generate_schedule(start_date, days_count=7):
+def generate_schedule(start_date, days_count=21):
     """
-    Генерирует расписание на основе МАРШРУТОВ (InspectionRoute).
+    Генерирует расписание на основе МАРШРУТОВ с использованием стабильной очереди.
     """
-    # 1. Загружаем МАРШРУТЫ (а не шаблоны)
-    # Сортируем по order, чтобы порядок раздачи был фиксирован
-    # prefetch_related('templates') загружает связанные шаблоны сразу, чтобы не тормозить
+    log = logger.bind(
+        service="schedule_generator", start_date=str(start_date), days_count=days_count
+    )
+
+    log.info("generator_started - Старт генерации расписания")
+
     routes = list(
         InspectionRoute.objects.all().order_by("order").prefetch_related("templates")
     )
-
     inspectors = list(
         User.objects.filter(is_active=True, can_perform_inspections=True).order_by("id")
     )
 
     if not routes:
-        return (
-            "Ошибка: Не настроены Маршруты (InspectionRoute). Заполните их в админке."
-        )
+        log.error("generation_failed_no_routes - Ошибка: Не настроены Маршруты.")
+        return "Ошибка: Не настроены Маршруты."
     if not inspectors:
+        log.error(
+            "generation_failed_no_inspectors - Ошибка: Нет сотрудников-инспекторов."
+        )
         return "Ошибка: Нет сотрудников-инспекторов."
 
-    # 2. ОПРЕДЕЛЯЕМ ТОЧКУ СТАРТА ОЧЕРЕДИ
-    last_entry = Schedule.objects.order_by("-date", "-id").first()
+    log.info(
+        "resources_loaded - Ресурсы загружены",
+        routes_count=len(routes),
+        inspectors_count=len(inspectors),
+    )
+
+    # --- ОПРЕДЕЛЯЕМ ТОЧКУ СТАРТА (УМНАЯ ЗАКЛАДКА) ---
+    state, _ = ScheduleGeneratorState.objects.get_or_create(id=1)
 
     start_index = 0
-    if last_entry:
-        try:
-            last_inspector_index = inspectors.index(last_entry.inspector)
-            start_index = (last_inspector_index + 1) % len(inspectors)
-        except ValueError:
-            start_index = 0
+    if state.last_user_id > 0:
+        # 1. Пытаемся найти точный индекс последнего человека в текущем списке
+        found = False
+        for idx, inspector in enumerate(inspectors):
+            if inspector.id == state.last_user_id:
+                start_index = (idx + 1) % len(inspectors)
+                found = True
+                log.info(
+                    "queue_state_found - Указатель очереди найден",
+                    last_user_id=state.last_user_id,
+                    next_index=start_index,
+                )
+                break
+
+        # 2. ЕСЛИ ЧЕЛОВЕКА УВОЛИЛИ (Критический случай)
+        if not found:
+            # Ищем первого человека, чей ID больше уволенного
+            # (так как список отсортирован по ID, это будет тот, кто стоял сразу за ним)
+            log.warning(
+                "queue_state_user_missing - Утерян указатель. Возможно уволен, Берем следующего в очереди",
+                missing_user_id=state.last_user_id,
+            )
+            next_survivor = None
+            for idx, inspector in enumerate(inspectors):
+                if inspector.id > state.last_user_id:
+                    next_survivor = idx
+                    break
+
+            if next_survivor is not None:
+                start_index = next_survivor  # Начинаем прямо с него
+                log.info(
+                    "queue_state_recovered - Новый указатель найден (восстановлен)",
+                    next_survivor_id=inspectors[start_index].id,
+                )
+            else:
+                # Если уволенный был самым последним в списке,
+                # значит следующий выживший - это самый первый в списке (0).
+                start_index = 0
+                log.info("queue_state_reset_to_zero - Указатель на очередь сброшен в 0")
+    else:
+        log.info("queue_state_initial_start")
 
     current_inspector_idx = start_index
     created_total = 0
@@ -67,26 +115,27 @@ def generate_schedule(start_date, days_count=7):
     with transaction.atomic():
         for _ in range(days_count):
             if not is_working_day(current_date):
+                log.info(
+                    "day_skipped - День пропущен. Не рабочий день",
+                    date=str(current_date),
+                    reason="not_working_day",
+                )
                 current_date += datetime.timedelta(days=1)
                 continue
 
-            # 3. НАЗНАЧЕНИЕ ПО МАРШРУТАМ
+            day_log = log.bind(date=str(current_date))
+            day_assigned_count = 0
+
             for route in routes:
                 inspector = inspectors[current_inspector_idx]
 
-                # Получаем список шаблонов внутри этого маршрута (например, Раздув + ЦПМ)
                 templates_in_route = route.templates.all()
-
                 if not templates_in_route:
-                    # Пустой маршрут? Пропускаем, очередь не двигаем
+                    day_log.warning("route_empty - Пустой маршрут", route_id=route.id)
                     continue
 
-                # Флаг: удалось ли что-то назначить?
                 assigned_something = False
-
-                # Назначаем ЭТОМУ ЖЕ инспектору ВСЕ шаблоны из маршрута
                 for tmpl in templates_in_route:
-                    # Защита от дублей: если на этот день и шаблон уже есть запись -> пропускаем
                     if not Schedule.objects.filter(
                         date=current_date, template=tmpl
                     ).exists():
@@ -95,15 +144,49 @@ def generate_schedule(start_date, days_count=7):
                         )
                         created_total += 1
                         assigned_something = True
+                    else:
+                        day_log.debug(
+                            "slot_already_taken - Маршрут уже занят", template=tmpl.name
+                        )
 
-                # Сдвигаем очередь ТОЛЬКО если мы реально назначили работу
+                # Сдвигаем очередь только если назначили маршрут
                 if assigned_something:
+                    day_log.info(
+                        "route_assigned - Маршрут назначен",
+                        route_id=route.id,
+                        inspector_id=inspector.id,
+                    )
                     current_inspector_idx = (current_inspector_idx + 1) % len(
                         inspectors
                     )
 
+            day_log.info(
+                "day_processed - Маршруты на день назначены",
+                routes_assigned=day_assigned_count,
+            )
             current_date += datetime.timedelta(days=1)
 
+        # --- СОХРАНЯЕМ ЗАКЛАДКУ ДЛЯ СЛЕДУЮЩЕГО РАЗА ---
+        if created_total > 0:
+            # Вычисляем, кто реально получил последнюю задачу
+            # (отнимаем 1, потому что индекс уже сдвинулся на следующего)
+            last_assigned_idx = (current_inspector_idx - 1) % len(inspectors)
+            state.last_user_id = inspectors[last_assigned_idx].id
+            state.save()
+            log.info(
+                "queue_state_saved - Указатель очереди сохранен",
+                new_last_user_id=state.last_user_id,
+            )
+        else:
+            log.info(
+                "queue_state_unchanged - Указатель очереди не назначен",
+                reason="no_records_created",
+            )
+
+    log.info(
+        "generator_finished - Генератор закончил формировать расписание",
+        total_created=created_total,
+    )
     return f"Генерация завершена. Создано записей: {created_total}."
 
 
