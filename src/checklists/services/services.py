@@ -62,57 +62,63 @@ def generate_schedule(start_date, days_count=21):
         inspectors_count=len(inspectors),
     )
 
-    # --- ОПРЕДЕЛЯЕМ ТОЧКУ СТАРТА (УМНАЯ ЗАКЛАДКА) ---
-    state, _ = ScheduleGeneratorState.objects.get_or_create(id=1)
+    with transaction.atomic():
+        # --- ОПРЕДЕЛЯЕМ ТОЧКУ СТАРТА (УМНАЯ ЗАКЛАДКА) ---
+        # 1. Берём state с блокировкой
+        state, _ = ScheduleGeneratorState.objects.select_for_update().get_or_create(
+            id=1
+        )
 
-    start_index = 0
-    if state.last_user_id > 0:
-        # 1. Пытаемся найти точный индекс последнего человека в текущем списке
-        found = False
-        for idx, inspector in enumerate(inspectors):
-            if inspector.id == state.last_user_id:
-                start_index = (idx + 1) % len(inspectors)
-                found = True
-                log.info(
-                    "queue_state_found - Указатель очереди найден",
-                    last_user_id=state.last_user_id,
-                    next_index=start_index,
-                )
-                break
-
-        # 2. ЕСЛИ ЧЕЛОВЕКА УВОЛИЛИ (Критический случай)
-        if not found:
-            # Ищем первого человека, чей ID больше уволенного
-            # (так как список отсортирован по ID, это будет тот, кто стоял сразу за ним)
-            log.warning(
-                "queue_state_user_missing - Утерян указатель. Возможно уволен, Берем следующего в очереди",
-                missing_user_id=state.last_user_id,
-            )
-            next_survivor = None
+        # 2. Определяем start_index
+        start_index = 0
+        if state.last_user_id > 0:
+            # 1. Пытаемся найти точный индекс последнего человека в текущем списке
+            found = False
             for idx, inspector in enumerate(inspectors):
-                if inspector.id > state.last_user_id:
-                    next_survivor = idx
+                if inspector.id == state.last_user_id:
+                    start_index = (idx + 1) % len(inspectors)
+                    found = True
+                    log.info(
+                        "queue_state_found - Указатель очереди найден",
+                        last_user_id=state.last_user_id,
+                        next_index=start_index,
+                    )
                     break
 
-            if next_survivor is not None:
-                start_index = next_survivor  # Начинаем прямо с него
-                log.info(
-                    "queue_state_recovered - Новый указатель найден (восстановлен)",
-                    next_survivor_id=inspectors[start_index].id,
+            # 2. ЕСЛИ ЧЕЛОВЕКА УВОЛИЛИ (Критический случай)
+            if not found:
+                # Ищем первого человека, чей ID больше уволенного
+                # (так как список отсортирован по ID, это будет тот, кто стоял сразу за ним)
+                log.warning(
+                    "queue_state_user_missing - Утерян указатель. Возможно уволен, Берем следующего в очереди",
+                    missing_user_id=state.last_user_id,
                 )
-            else:
-                # Если уволенный был самым последним в списке,
-                # значит следующий выживший - это самый первый в списке (0).
-                start_index = 0
-                log.info("queue_state_reset_to_zero - Указатель на очередь сброшен в 0")
-    else:
-        log.info("queue_state_initial_start")
+                next_survivor = None
+                for idx, inspector in enumerate(inspectors):
+                    if inspector.id > state.last_user_id:
+                        next_survivor = idx
+                        break
 
-    current_inspector_idx = start_index
-    created_total = 0
-    current_date = start_date
+                if next_survivor is not None:
+                    start_index = next_survivor  # Начинаем прямо с него
+                    log.info(
+                        "queue_state_recovered - Новый указатель найден (восстановлен)",
+                        next_survivor_id=inspectors[start_index].id,
+                    )
+                else:
+                    # Если уволенный был самым последним в списке,
+                    # значит следующий выживший - это самый первый в списке (0).
+                    start_index = 0
+                    log.info(
+                        "queue_state_reset_to_zero - Указатель на очередь сброшен в 0"
+                    )
+        else:
+            log.info("queue_state_initial_start")
 
-    with transaction.atomic():
+        current_inspector_idx = start_index
+        created_total = 0
+        current_date = start_date
+
         for _ in range(days_count):
             if not is_working_day(current_date):
                 log.info(
@@ -144,8 +150,9 @@ def generate_schedule(start_date, days_count=21):
                         )
                         created_total += 1
                         assigned_something = True
+                        day_assigned_count += 1
                     else:
-                        day_log.debug(
+                        day_log.info(
                             "slot_already_taken - Маршрут уже занят", template=tmpl.name
                         )
 
