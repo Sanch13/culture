@@ -135,8 +135,8 @@ def admin_weekly_schedule(request):
         InspectionRoute.objects.all().order_by("order").prefetch_related("templates")
     )
 
-    # 2. Загружаем расписание на 3 недели
-    end_date = start_of_current_week + timedelta(days=21)
+    # --- ИЗМЕНЕНИЕ 1: Загружаем расписание на 4 недели (28 дней) ---
+    end_date = start_of_current_week + timedelta(days=28)
 
     all_schedules = Schedule.objects.filter(
         date__range=[start_of_current_week, end_date]
@@ -168,11 +168,12 @@ def admin_weekly_schedule(request):
     # 5. Генерируем данные для 3-х недель
     weeks_data = []
 
-    for i in range(3):
+    # --- ИЗМЕНЕНИЕ 2: Цикл на 4 недели ---
+    for i in range(4):  # 0, 1, 2, 3
         week_start = start_of_current_week + timedelta(weeks=i)
         # week_days = [week_start + timedelta(days=d) for d in range(5)]
 
-        week_days = [week_start + timedelta(days=d) for d in range(7)]
+        week_days = [week_start + timedelta(days=d) for d in range(6)]
 
         rows = []
         for route in routes:
@@ -219,12 +220,21 @@ def admin_weekly_schedule(request):
 
             rows.append({"route": route, "cells": cells})
 
+        # --- ИЗМЕНЕНИЕ 3: Название новой вкладки ---
+        # Индексы: 0(Текущая), 1(Следующая), 2(Через 2 недели), 3(Через 3 недели)
+        if i == 0:
+            title = "Текущая"
+        elif i == 1:
+            title = "Следующая"
+        elif i == 2:
+            title = "Через 2 недели"
+        else:
+            title = "Через 3 недели"
+
         weeks_data.append(
             {
                 "index": i,
-                "title": "Текущая"
-                if i == 0
-                else ("Следующая" if i == 1 else "Через 2 недели"),
+                "title": title,
                 "date_start": week_days[0],
                 "date_end": week_days[-1],
                 "week_days": week_days,
