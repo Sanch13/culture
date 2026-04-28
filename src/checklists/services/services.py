@@ -161,7 +161,9 @@ def generate_schedule(start_date, days_count=21):
                     day_log.info(
                         "route_assigned - Маршрут назначен",
                         route_id=route.id,
+                        router_name=route.title,
                         inspector_id=inspector.id,
+                        inspector_name=inspector.get_full_name(),
                     )
                     current_inspector_idx = (current_inspector_idx + 1) % len(
                         inspectors
@@ -491,6 +493,8 @@ def prepare_daily_notifications(target_date=None):
     """
     Данные для ЕЖЕДНЕВНОЙ рассылки.
     """
+    log = logger.bind(service="prepare_notifications", date=str(target_date or "today"))
+
     if target_date is None:
         target_date = datetime.date.today()
 
@@ -512,12 +516,15 @@ def prepare_daily_notifications(target_date=None):
         .order_by("inspector_id")
     )
 
+    log.info("fetching_schedules", found_count=schedules.count())
+
     notifications_data = []
 
     # 2. ГРУППИРУЕМ ЗАДАЧИ ПО ИНСПЕКТОРУ
     # groupby собирает все задачи одного инспектора вместе
     for inspector, items_iter in groupby(schedules, key=lambda s: s.inspector):
         if not inspector.email:
+            log.warning("inspector_missing_email", inspector_id=inspector.id)
             continue
 
         # Превращаем итератор в полноценный список
@@ -552,7 +559,7 @@ def prepare_daily_notifications(target_date=None):
                 "body": body,
             }
         )
-
+    log.info("notifications_built", total_ready=len(notifications_data))
     return notifications_data
 
 
