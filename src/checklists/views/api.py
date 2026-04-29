@@ -194,8 +194,8 @@ def toggle_employee_permission(request, user_id):
         body = (
             f"Здравствуйте, {user.first_name}!\n\n"
             f"Администратор предоставил вам доступ к проверкам.\n"
-            f"Теперь вы будете включены в график инспекций и можете проводить проверки.\n\n"
-            f"Войдите в личный кабинет: {settings.SITE_URL}my-checks/"
+            f"Теперь вы будете включены в график аудита и можете проводить проверки.\n\n"
+            f"Войдите в личный кабинет: {settings.SITE_URL}/my-checks/"
         )
 
         send_email.delay(to=email, subject=subject, body=body)
