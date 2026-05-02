@@ -32,6 +32,7 @@ from checklists.views.api import (
     api_get_swap_candidates,
     save_repeated_ajax,
     api_get_violations_report,
+    api_cascade_shift,
 )
 
 __all__ = (
@@ -64,4 +65,5 @@ __all__ = (
     "api_get_swap_candidates",
     "save_repeated_ajax",
     "api_get_violations_report",
+    "api_cascade_shift",
 )

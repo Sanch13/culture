@@ -152,6 +152,14 @@
                                                         onclick="openExchangeModal(this)">
                                                     <i class="bi bi-arrow-left-right"></i>
                                                 </button>
+
+                                                <!-- НОВАЯ КНОПКА: КАСКАДНОЕ УДАЛЕНИЕ -->
+                                                <button class="btn btn-outline-danger btn-swap"
+                                                        title="Отпуск? Удалить из расписания (Сдвинуть очередь)"
+                                                        onclick="cascadeShift({{ cell.first_schedule_id }}, '{{ cell.inspector.get_full_name }}', '{{ cell.date|date:'d.m.Y' }}')">
+                                                    <i class="bi bi-person-x"></i>
+                                                </button>
+
                                             {% endif %}
 
                                             <!-- Индикатор, что замена уже была -->
@@ -284,6 +292,22 @@
 
 <!-- JAVASCRIPT ДЛЯ ПЕРЕДАЧИ ДАННЫХ В МОДАЛКУ -->
 <script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
     // 1. Логика для генерации
     const generateModal = document.getElementById('generateModal')
     if (generateModal) {
@@ -365,6 +389,34 @@
         } finally {
             spinner.style.display = 'none'; // Скрываем спиннер
         }
+    }
+
+    function cascadeShift(scheduleId, inspectorName, humanDate) {
+        if (!confirm(`Вы уверены, что хотите удалить ${inspectorName} из расписания на ${humanDate}?\n\nВНИМАНИЕ: Это приведет к сдвигу всей очереди проверяющих до конца месяца!`)) {
+            return;
+        }
+
+        // Блокируем экран (можно показать спиннер), так как перестройка может занять пару секунд
+        document.body.style.cursor = 'wait';
+
+        fetch(`/api/admin/cascade-shift/${scheduleId}/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken}
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.body.style.cursor = 'default';
+            if (data.status === 'ok') {
+                alert(data.message);
+                location.reload(); // Перезагружаем страницу, чтобы увидеть новый график
+            } else {
+                alert("Ошибка: " + data.message);
+            }
+        })
+        .catch(error => {
+            document.body.style.cursor = 'default';
+            alert("Сбой сети: " + error);
+        });
     }
 </script>
 {% endblock %}
