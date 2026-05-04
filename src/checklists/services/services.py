@@ -441,6 +441,8 @@ def build_composite_email_body(schedules, intro_message):
     body.append(_get_production_chief_text())
 
     body.append("------------------------")
+    body.append("Перейти к приложению https://culture.miran.by/auth/login/")
+    body.append("------------------------")
     body.append(
         "Если вы не можете выполнить проверку, воспользуйтесь кнопкой 'Автозамена' в личном кабинете."
     )
@@ -942,6 +944,8 @@ def prepare_weekly_notifications():
         body_lines.append(_get_production_chief_text())
 
         body_lines.append("------------------------")
+        body_lines.append("Перейти к приложению https://culture.miran.by/auth/login/")
+        body_lines.append("------------------------")
         body_lines.append(
             "Если вы не можете выполнить проверку, воспользуйтесь кнопкой 'Автозамена' в личном кабинете."
         )
@@ -1044,6 +1048,8 @@ def prepare_monday_reminders():
             body_lines.append(_get_location_contacts_text(loc))
 
         body_lines.append(_get_production_chief_text())
+        body_lines.append("------------------------")
+        body_lines.append("Перейти к приложению https://culture.miran.by/auth/login/")
         body_lines.append("------------------------")
         body_lines.append(
             "Если вы не можете выполнить проверку, воспользуйтесь кнопкой 'Автозамена' в личном кабинете."
