@@ -360,7 +360,9 @@ def management_violations_report_page(request):
         "default_start": week_ago.strftime("%Y-%m-%d"),
         "default_end": today.strftime("%Y-%m-%d"),
     }
-    return render(request, "checklists/management_violations_report.html", context)
+    return render(
+        request, "checklists/management_violations_report_no_admin.html", context
+    )
 
 
 @management_required
