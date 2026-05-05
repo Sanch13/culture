@@ -257,10 +257,13 @@ def admin_weekly_schedule(request):
 @admin_required
 @require_POST
 def admin_exchange_shifts(request):
+    is_silent = request.POST.get("is_silent") == "true"
+
     log = logger.bind(
         requestor_id=request.user.id,
         source_date=request.POST.get("source_date"),
         source_inspector_id=request.POST.get("source_inspector_id"),
+        is_silent=is_silent,
     )
 
     log.info("swap_request_received - Старт замены проверяющих")
@@ -320,24 +323,34 @@ def admin_exchange_shifts(request):
                 t.is_swapped = True  # Исходный уехал в будущее, его больше не трогать
                 t.save()
 
+            # Формируем причину для лога БД
+            reason_text = f"Обмен сменами {source_user.last_name} {source_user.first_name} ({source_date_str}) <-> {target_user.last_name} {target_user.first_name} ({target_date_str})"
+            if is_silent:
+                reason_text += " [Тихая замена]"
+
             # Пишем лог
             SwapLog.objects.create(
                 requestor=request.user,
                 target_user=target_user,
                 source_date=source_date_str,
                 target_date=target_date_str,
-                reason=f"Обмен сменами {source_user.last_name} ({source_date_str}) <-> {target_user.last_name} ({target_date_str})",
+                reason=reason_text,
             )
 
-            # Уведомления (если нужно)
-            # target_user теперь назначен на source_date
-            notify_user_about_swap.delay(source_date_str, target_user.id)
-            log.info(
-                "swap_notification_queued - Поставил в очередь уведомить проверяющего",
-                recipient_id=target_user.id,
-            )
-            # source_user теперь назначен на target_date
-            # notify_user_about_swap.delay(target_date_str, source_user.id)
+            # 5. ЛОГИКА УВЕДОМЛЕНИЙ (Проверяем флаг)
+            if not is_silent:
+                notify_user_about_swap.delay(source_date_str, target_user.id)
+                # source_user теперь назначен на target_date
+                # notify_user_about_swap.delay(target_date_str, source_user.id)
+                log.info(
+                    "swap_notification_queued - Поставил в очередь уведомить проверяющего",
+                    recipient_id=target_user.id,
+                )
+            else:
+                log.info(
+                    "swap_notification_skipped - Тихая замена, отправка email отменена",
+                    recipient_id=target_user.id,
+                )
 
         messages.success(
             request,
