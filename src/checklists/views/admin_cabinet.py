@@ -341,7 +341,7 @@ def admin_exchange_shifts(request):
             if not is_silent:
                 notify_user_about_swap.delay(source_date_str, target_user.id)
                 # source_user теперь назначен на target_date
-                # notify_user_about_swap.delay(target_date_str, source_user.id)
+                notify_user_about_swap.delay(target_date_str, source_user.id)
                 log.info(
                     "swap_notification_queued - Поставил в очередь уведомить проверяющего",
                     recipient_id=target_user.id,

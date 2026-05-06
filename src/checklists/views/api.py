@@ -317,7 +317,10 @@ def api_cascade_shift(request, schedule_id):
 
     # Вызываем магию
     success, message = cascade_shift_schedule(
-        target_date, user_to_remove, is_silent=is_silent
+        target_date=target_date,
+        user_to_remove=user_to_remove,
+        requestor=request.user,
+        is_silent=is_silent,
     )
 
     if success:

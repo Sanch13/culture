@@ -5,13 +5,13 @@ from django.db.models import Q
 
 import structlog
 
-from checklists.models import Schedule
+from checklists.models import Schedule, SwapLog
 from checklists.tasks import notify_user_about_swap
 
 logger = structlog.get_logger(__name__)
 
 
-def cascade_shift_schedule(target_date, user_to_remove, is_silent=True):
+def cascade_shift_schedule(target_date, user_to_remove, requestor, is_silent=True):
     """
     Каскадный сдвиг очереди.
     Сдвигает всех инспекторов вверх. Оставляет последний день периода пустым
@@ -151,8 +151,20 @@ def cascade_shift_schedule(target_date, user_to_remove, is_silent=True):
             deleted_tasks=deleted_tail_count,
         )
 
+    reason_text = f"Удаление из графика проверок: {user_to_remove.last_name} {user_to_remove.first_name} на {target_date} (Каскадный сдвиг очереди)"
+    if is_silent:
+        reason_text += " [Тихий сдвиг]"
+
+    SwapLog.objects.create(
+        requestor=requestor,
+        target_user=user_to_remove,  # Тот, кого мы удалили
+        source_date=target_date,  # Дата, с которой удалили
+        target_date=target_date,  # При сдвиге целевой даты у удаляемого нет, дублируем
+        reason=reason_text,
+    )
+    log.info("swap_log_created", reason=reason_text)
+
     # 6. ВЫПОЛНЯЕМ ОТПРАВКУ УВЕДОМЛЕНИЙ (ПОСЛЕ УСПЕШНОГО КОММИТА ТРАНЗАКЦИИ)
-    # Вынесено за пределы with transaction.atomic()
     if notifications_to_send:
         log.info("triggering_cascade_notifications", count=len(notifications_to_send))
         for notify_date, notify_user_id in notifications_to_send:

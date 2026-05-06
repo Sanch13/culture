@@ -247,14 +247,29 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
     current_date = schedule_item.date
     current_user = schedule_item.inspector
 
+    log = logger.bind(
+        service="perform_auto_swap",
+        initiator_id=current_user.id,
+        source_date=str(current_date),
+    )
+
+    log.info("service_started")
+
     # 1. Находим ВСЕ задачи инициатора на этот день (чтобы отдать их все)
     current_tasks = list(
         Schedule.objects.filter(date=current_date, inspector=current_user)
     )
 
+    log.info("initiator_tasks_found", count=len(current_tasks))
+
     # Защита: вдруг хоть один из отчетов уже начат? (Хотя view это уже проверила)
     for t in current_tasks:
         if t.inspection:
+            log.warning(
+                "service_aborted",
+                reason="partially_started_tasks_found",
+                problem_task_id=t.id,
+            )
             return (
                 False,
                 "Нельзя обменять смену, так как часть проверок уже начата.",
@@ -267,6 +282,8 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
     if days_until_next_monday <= 0:
         days_until_next_monday = 7
     start_of_next_week = today + datetime.timedelta(days=days_until_next_monday)
+
+    log.info("searching_candidate", search_from_date=str(start_of_next_week))
 
     # 3. Ищем кандидата-жертву (любую неначатую смену на следующей неделе)
     candidate_task = (
@@ -281,6 +298,7 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
     )
 
     if not candidate_task:
+        log.error("service_failed", reason="no_candidates_available")
         return (
             False,
             "Нет доступных кандидатов на следующей неделе. Сообщите администратору.",
@@ -295,40 +313,53 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
         Schedule.objects.filter(date=target_date, inspector=target_user)
     )
 
+    log = log.bind(target_user_id=target_user.id, target_date=str(target_date))
+    log.info("candidate_found", target_tasks_count=len(target_tasks))
+
     # 5. СОВЕРШАЕМ ОБМЕН
-    with transaction.atomic():
-        # Мои задачи отдаем ему
-        for t in current_tasks:
-            t.inspector = target_user
-            t.is_swapped = False  # Оставляем False, чтобы жертва могла отказаться
-            t.save()
+    try:
+        with transaction.atomic():
+            # Мои задачи отдаем ему
+            for t in current_tasks:
+                t.inspector = target_user
+                t.is_swapped = False  # Оставляем False, чтобы жертва могла отказаться
+                t.save()
 
-        # Его задачи забираю я
-        for t in target_tasks:
-            t.inspector = current_user
-            t.is_swapped = True  # Я переехал, меня больше трогать нельзя
-            t.save()
+            # Его задачи забираю я
+            for t in target_tasks:
+                t.inspector = current_user
+                t.is_swapped = True  # Я переехал, меня больше трогать нельзя
+                t.save()
 
-        # 6. Пишем лог (ОДИН лог на весь обмен, не нужно плодить дубли)
-        reason_dict = {
-            "vacation": "Трудовой отпуск",
-            "trip": "Командировка",
-            "sick": "Больничный",
-            "other": "Другое",
-        }
-        human_reason = reason_dict.get(reason_type, "Неизвестно")
+            # 6. Пишем лог (ОДИН лог на весь обмен, не нужно плодить дубли)
+            reason_dict = {
+                "vacation": "Трудовой отпуск",
+                "trip": "Командировка",
+                "sick": "Больничный",
+                "other": "Другое",
+            }
+            human_reason = reason_dict.get(reason_type, "Неизвестно")
 
-        final_reason_str = f"{human_reason}"
-        if reason_text:
-            final_reason_str += f" ({reason_text})"
+            final_reason_str = f"{human_reason}"
+            if reason_text:
+                final_reason_str += f" ({reason_text})"
 
-        SwapLog.objects.create(
-            requestor=current_user,
-            target_user=target_user,
-            source_date=current_date,
-            target_date=target_date,
-            reason_type=reason_type,
-            reason=final_reason_str,
+            SwapLog.objects.create(
+                requestor=current_user,
+                target_user=target_user,
+                source_date=current_date,
+                target_date=target_date,
+                reason_type=reason_type,
+                reason=final_reason_str,
+            )
+            log.info("db_transaction_committed", swap_reason=final_reason_str)
+
+    except Exception as e:
+        log.error("db_transaction_failed", error=str(e), exc_info=True)
+        return (
+            False,
+            "Произошла ошибка при сохранении данных в БД.",
+            "",
         )
 
     info_about_change = (
@@ -336,9 +367,10 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
         f"заменился на {target_user.last_name} {target_user.first_name}.\nПричина: {final_reason_str}"
     )
 
+    log.info("service_completed_successfully")
     return (
         True,
-        f"Обмен выполнен. Вы перенесены на {target_date.strftime('%d.%m')}. Вместо вас выйдет {target_user.last_name}.",
+        f"Обмен выполнен. Вы перенесены на {target_date.strftime('%d.%m')}. Вместо вас выйдет {target_user.last_name} {target_user.first_name}.",
         info_about_change,
     )
 
