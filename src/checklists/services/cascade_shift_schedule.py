@@ -1,13 +1,17 @@
+import datetime
 from django.db import transaction
+from django.utils import timezone
+from django.db.models import Q
 
 import structlog
 
 from checklists.models import Schedule
+from checklists.tasks import notify_user_about_swap
 
 logger = structlog.get_logger(__name__)
 
 
-def cascade_shift_schedule(target_date, user_to_remove):
+def cascade_shift_schedule(target_date, user_to_remove, is_silent=True):
     """
     Каскадный сдвиг очереди.
     Сдвигает всех инспекторов вверх. Оставляет последний день периода пустым
@@ -17,15 +21,28 @@ def cascade_shift_schedule(target_date, user_to_remove):
         service="cascade_shift",
         target_date=str(target_date),
         user_to_remove_from_scheduler=user_to_remove,
+        is_silent=is_silent,
     )
 
     log.info("cascade_shift_started")
 
+    # Вычисляем границы текущей календарной недели (Пн - Вс)
+    today = timezone.now().date()
+    start_of_week = today - datetime.timedelta(days=today.weekday())  # Понедельник
+    end_of_week = start_of_week + datetime.timedelta(days=6)  # Воскресенье
+
+    notifications_to_send = set()
     with transaction.atomic():
         # 1. Получаем все будущие записи, отсортированные хронологически
+        # Берем либо конкретно ту смену, которую удаляем (даже если is_swapped=True)
+        # Либо все будущие смены, которые не зафиксированы (is_swapped=False)
+        condition = Q(date=target_date, inspector=user_to_remove) | Q(
+            date__gte=target_date, is_swapped=False
+        )
+
         future_records = (
             Schedule.objects.select_for_update()
-            .filter(date__gte=target_date, inspection__isnull=True, is_swapped=False)
+            .filter(condition, inspection__isnull=True)
             .order_by("date", "id")
         )
 
@@ -93,12 +110,23 @@ def cascade_shift_schedule(target_date, user_to_remove):
             target_block = blocks[i]
             next_block = blocks[i + 1]
 
+            current_target_date = target_block["date"]
             new_inspector_id = next_block["inspector_id"]
 
             # Берем ID задач ТЕКУЩЕГО блока и назначаем им инспектора из СЛЕДУЮЩЕГО блока
+            # Обновляем БД
+            # ВАЖНО: принудительно ставим is_swapped=False.
+            # Если мы удалили зафиксированную смену, для нового человека она должна стать обычной!
             updated_count = Schedule.objects.filter(
                 id__in=target_block["schedule_ids"]
-            ).update(inspector_id=new_inspector_id)
+            ).update(
+                inspector_id=new_inspector_id,
+                is_swapped=False,  # <-- Снимаем флаг фиксации
+            )
+
+            # Проверка для уведомлений
+            if not is_silent and (start_of_week <= current_target_date <= end_of_week):
+                notifications_to_send.add((str(current_target_date), new_inspector_id))
 
             shifted_blocks_count += 1
             log.info(
@@ -122,6 +150,13 @@ def cascade_shift_schedule(target_date, user_to_remove):
             date=str(last_block["date"]),
             deleted_tasks=deleted_tail_count,
         )
+
+    # 6. ВЫПОЛНЯЕМ ОТПРАВКУ УВЕДОМЛЕНИЙ (ПОСЛЕ УСПЕШНОГО КОММИТА ТРАНЗАКЦИИ)
+    # Вынесено за пределы with transaction.atomic()
+    if notifications_to_send:
+        log.info("triggering_cascade_notifications", count=len(notifications_to_send))
+        for notify_date, notify_user_id in notifications_to_send:
+            notify_user_about_swap.delay(notify_date, notify_user_id)
 
     log.info("cascade_shift_completed", shifted_blocks_count=shifted_blocks_count)
     return (

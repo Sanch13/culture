@@ -299,6 +299,40 @@
     </div>
 </div>
 
+<!-- МОДАЛЬНОЕ ОКНО: КАСКАДНЫЙ СДВИГ РАСПИСАНИЯ -->
+<div class="modal fade" id="cascadeDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger bg-opacity-10">
+                <h5 class="modal-title text-danger">⚠️ Удаление из расписания</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить <strong id="cdInspectorName"></strong> из расписания на <strong id="cdDate"></strong>?</p>
+
+                <div class="alert alert-warning small">
+                    <i class="bi bi-exclamation-triangle"></i> ВНИМАНИЕ: Это приведет к каскадному сдвигу всех последующих проверяющих!
+                </div>
+
+                <!-- Чекбокс тихой замены -->
+                <div class="form-check mt-3 border rounded p-2 bg-light">
+                    <input class="form-check-input ms-1" type="checkbox" value="true" id="cdSilentCheckbox" checked>
+                    <label class="form-check-label ms-2 text-muted fw-bold" style="cursor: pointer;" for="cdSilentCheckbox">
+                        🔕 Тихий сдвиг (не отправлять email сдвинутым)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <!-- Скрытое поле для ID -->
+                <input type="hidden" id="cdScheduleId">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" onclick="executeCascadeShift()">Удалить и сдвинуть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <!-- JAVASCRIPT ДЛЯ ПЕРЕДАЧИ ДАННЫХ В МОДАЛКУ -->
 <script>
     function getCookie(name) {
@@ -400,24 +434,45 @@
         }
     }
 
+    // 1. Открытие модалки
     function cascadeShift(scheduleId, inspectorName, humanDate) {
-        if (!confirm(`Вы уверены, что хотите удалить ${inspectorName} из расписания на ${humanDate}?\n\nВНИМАНИЕ: Это приведет к сдвигу всей очереди проверяющих до конца месяца!`)) {
-            return;
-        }
+        // Заполняем данные в модалке
+        document.getElementById('cdInspectorName').textContent = inspectorName;
+        document.getElementById('cdDate').textContent = humanDate;
+        document.getElementById('cdScheduleId').value = scheduleId;
 
-        // Блокируем экран (можно показать спиннер), так как перестройка может занять пару секунд
+        // По умолчанию ставим галочку (на твое усмотрение, можно убрать)
+        document.getElementById('cdSilentCheckbox').checked = true;
+
+        // Показываем модалку
+        const modal = new bootstrap.Modal(document.getElementById('cascadeDeleteModal'));
+        modal.show();
+    }
+
+    // 2. Выполнение запроса
+    function executeCascadeShift() {
+        const scheduleId = document.getElementById('cdScheduleId').value;
+        const isSilent = document.getElementById('cdSilentCheckbox').checked;
+
+        // Скрываем модалку и блокируем экран
+        bootstrap.Modal.getInstance(document.getElementById('cascadeDeleteModal')).hide();
         document.body.style.cursor = 'wait';
+
+        // Формируем тело запроса
+        const formData = new FormData();
+        formData.append('is_silent', isSilent);
 
         fetch(`/api/admin/cascade-shift/${scheduleId}/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': csrftoken}
+            headers: {'X-CSRFToken': csrftoken},
+            body: formData
         })
         .then(response => response.json())
         .then(data => {
             document.body.style.cursor = 'default';
             if (data.status === 'ok') {
                 alert(data.message);
-                location.reload(); // Перезагружаем страницу, чтобы увидеть новый график
+                location.reload();
             } else {
                 alert("Ошибка: " + data.message);
             }

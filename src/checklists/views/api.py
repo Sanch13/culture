@@ -291,14 +291,16 @@ def api_get_violations_report(request):
 @admin_required
 @require_POST
 def api_cascade_shift(request, schedule_id):
+    is_silent_str = request.POST.get("is_silent", "true")
+    is_silent = is_silent_str.lower() == "true"
+
     log = logger.bind(
-        service="api_cascade_shift",
-        schedule_id=schedule_id,
+        service="api_cascade_shift", schedule_id=schedule_id, is_silent=is_silent
     )
     # Находим задачу, по которой кликнул Админ
     schedule_item = get_object_or_404(Schedule, id=schedule_id)
 
-    log.info("Задача которую нужно удалить", schedule_item=schedule_item)
+    log.info("[API] Удаление проверяющего из расписания", schedule_item=schedule_item)
 
     # Запрещаем трогать прошлое
     if schedule_item.date < timezone.now().date():
@@ -314,7 +316,9 @@ def api_cascade_shift(request, schedule_id):
     user_to_remove = schedule_item.inspector
 
     # Вызываем магию
-    success, message = cascade_shift_schedule(target_date, user_to_remove)
+    success, message = cascade_shift_schedule(
+        target_date, user_to_remove, is_silent=is_silent
+    )
 
     if success:
         return JsonResponse({"status": "ok", "message": message})
