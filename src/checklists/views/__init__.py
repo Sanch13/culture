@@ -12,6 +12,7 @@ from checklists.views.admin_cabinet import (
     admin_exchange_shifts,
     admin_analytics_dashboard,
     admin_violations_report_page,
+    admin_inspection_edit_view,
 )
 from checklists.views.employee_cabinet import (
     employee_dashboard,
@@ -33,6 +34,7 @@ from checklists.views.api import (
     save_repeated_ajax,
     api_get_violations_report,
     api_cascade_shift,
+    api_delete_violation_photo,
 )
 
 __all__ = (
@@ -49,6 +51,7 @@ __all__ = (
     "admin_exchange_shifts",
     "admin_analytics_dashboard",
     "admin_violations_report_page",
+    "admin_inspection_edit_view",
     "employee_dashboard",
     "inspection_form_view",
     "start_inspection_view",
@@ -66,4 +69,5 @@ __all__ = (
     "save_repeated_ajax",
     "api_get_violations_report",
     "api_cascade_shift",
+    "api_delete_violation_photo",
 )

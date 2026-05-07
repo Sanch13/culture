@@ -31,6 +31,11 @@ urlpatterns = [
         views.admin_violations_report_page,
         name="admin_management_violations",
     ),
+    path(
+        "cabinet/admin/report/<int:inspection_id>/edit/",
+        views.admin_inspection_edit_view,
+        name="admin_inspection_edit",
+    ),
     # =====================
     # Предпросмотр конкретного шаблона
     # =====================
@@ -113,5 +118,10 @@ urlpatterns = [
         "api/admin/cascade-shift/<int:schedule_id>/",
         views.api_cascade_shift,
         name="api_cascade_shift",
+    ),
+    path(
+        "api/del-photo/<int:photo_id>/",
+        views.api_delete_violation_photo,
+        name="api_delete_photo",
     ),
 ]

@@ -327,3 +327,14 @@ def api_cascade_shift(request, schedule_id):
         return JsonResponse({"status": "ok", "message": message})
     else:
         return JsonResponse({"status": "error", "message": message})
+
+
+@admin_required
+@require_POST
+def api_delete_violation_photo(request, photo_id):
+    """AJAX удаление фотографии"""
+    photo = get_object_or_404(ViolationPhoto, id=photo_id)
+    if photo.image:
+        photo.image.delete(save=False)  # Удаляем физический файл
+    photo.delete()
+    return JsonResponse({"status": "ok"})
