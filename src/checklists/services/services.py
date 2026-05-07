@@ -442,13 +442,26 @@ def build_composite_email_body(schedules, intro_message):
     Генерирует полный текст письма для нескольких шаблонов и участков.
     """
     inspector = schedules[0].inspector
+    target_date = schedules[0].date
     date_str = schedules[0].date.strftime("%d.%m.%Y")
+
+    # Название дня недели (0=Пн, 1=Вт...)
+    weekdays_ru = [
+        "Понедельник",
+        "Вторник",
+        "Среда",
+        "Четверг",
+        "Пятница",
+        "Суббота",
+        "Воскресенье",
+    ]
+    day_name = weekdays_ru[target_date.weekday()]
 
     # 1. Шапка
     body = [
         f"Здравствуйте, {inspector.first_name}!\n",
         f"{intro_message}\n",
-        f"📅 Дата смены: {date_str}\n",
+        f"📅 Дата смены: {date_str} ({day_name})\n",
     ]
 
     # 2. Собираем уникальные участки и список шаблонов
@@ -487,6 +500,12 @@ def get_swap_notification_data(date_str, user_id):
     """
     Собирает данные для письма на основе ВСЕХ задач инспектора на конкретный день.
     """
+    log = logger.bind(
+        service="get_swap_notification_data",
+        date_str=date_str,
+    )
+    log.info("Load all tasks - Загружаем все задачи (расписание) человека на этот день")
+
     # 1. Загружаем все задачи (расписание) человека на этот день
     schedules = list(
         Schedule.objects.filter(date=date_str, inspector_id=user_id)
@@ -501,6 +520,12 @@ def get_swap_notification_data(date_str, user_id):
             "template__location__deputies",
             "template__location__senior_masters",
         )
+    )
+
+    log.info(
+        "Tasks loaded successfully - Расписание задач на выбранный день загружен",
+        tasks_lenth=len(schedules),
+        inspector=schedules[0].inspector,
     )
 
     if not schedules:
