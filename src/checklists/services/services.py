@@ -277,11 +277,8 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
             )
 
     # 2. Вычисляем дату начала следующей недели
-    today = timezone.now().date()
-    days_until_next_monday = 7 - today.weekday()
-    if days_until_next_monday <= 0:
-        days_until_next_monday = 7
-    start_of_next_week = today + datetime.timedelta(days=days_until_next_monday)
+    days_until_next_monday = 7 - current_date.weekday()
+    start_of_next_week = current_date + datetime.timedelta(days=days_until_next_monday)
 
     log.info("searching_candidate", search_from_date=str(start_of_next_week))
 
