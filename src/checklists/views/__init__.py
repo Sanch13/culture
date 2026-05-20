@@ -35,6 +35,7 @@ from checklists.views.api import (
     api_get_violations_report,
     api_cascade_shift,
     api_delete_violation_photo,
+    test_error_view,
 )
 
 __all__ = (
@@ -70,4 +71,5 @@ __all__ = (
     "api_get_violations_report",
     "api_cascade_shift",
     "api_delete_violation_photo",
+    "test_error_view",
 )

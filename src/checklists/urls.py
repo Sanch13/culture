@@ -124,4 +124,5 @@ urlpatterns = [
         views.api_delete_violation_photo,
         name="api_delete_photo",
     ),
+    path("api/test-alert/", views.test_error_view),
 ]

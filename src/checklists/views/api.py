@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.shortcuts import get_object_or_404
 
@@ -338,3 +338,17 @@ def api_delete_violation_photo(request, photo_id):
         photo.image.delete(save=False)  # Удаляем физический файл
     photo.delete()
     return JsonResponse({"status": "ok"})
+
+
+def test_error_view(request):
+    """Специальная вьюха для тестирования алертов в Telegram"""
+    try:
+        # Имитируем падение
+        1 / 0
+    except Exception as e:
+        # Пишем лог так же, как мы делаем это в других частях проекта
+        logger.error("test_simulation_failed", error=str(e), exc_info=True)
+        # Пробрасываем ошибку дальше, чтобы сработал твой custom_500
+        raise e
+
+    return HttpResponse("This will never be reached")
