@@ -277,11 +277,8 @@ def perform_auto_swap(schedule_item, reason_type, reason_text):
             )
 
     # 2. Вычисляем дату начала следующей недели
-    today = timezone.now().date()
-    days_until_next_monday = 7 - today.weekday()
-    if days_until_next_monday <= 0:
-        days_until_next_monday = 7
-    start_of_next_week = today + datetime.timedelta(days=days_until_next_monday)
+    days_until_next_monday = 7 - current_date.weekday()
+    start_of_next_week = current_date + datetime.timedelta(days=days_until_next_monday)
 
     log.info("searching_candidate", search_from_date=str(start_of_next_week))
 
@@ -698,8 +695,16 @@ def calculate_inspection_score(inspection):
     ЭТАП 1: Высчитываем баллы для каждого РАЗДЕЛА (A, B1, B2, C...)
     ЭТАП 2: Высчитываем итоговый балл ОТЧЕТА.
     """
+    log = logger.bind(
+        service="calc_inspection_score",
+        inspection_id=inspection.id,
+        template_name=inspection.template.name,
+    )
+    log.info("inspection_score_calculation_started")
+
     items = inspection.items.all()
     if not items:
+        log.warning("inspection_has_no_items_calculation_aborted")
         return
 
     # --- 1. ОЦЕНКА РАЗДЕЛОВ ---
@@ -739,7 +744,12 @@ def calculate_inspection_score(inspection):
 
         sections_dict[stype]["items"].append(item)
 
-    InspectionSectionScore.objects.filter(inspection=inspection).delete()
+    # Очищаем старые баллы (для идемпотентности)
+    deleted_count, _ = InspectionSectionScore.objects.filter(
+        inspection=inspection
+    ).delete()
+    if deleted_count > 0:
+        log.info("cleared_old_section_scores", deleted_count=deleted_count)
 
     # Словарь для хранения посчитанных баллов: {'A': 5.0, 'B1': 3.0, 'C': 6.0}
     calculated_section_scores = {}
@@ -754,15 +764,34 @@ def calculate_inspection_score(inspection):
         if max_repeats >= 3:
             score = 2.0  # Двойной повтор (и более)
             has_repeat_penalty = True
+            log.info(
+                "section_penalty_applied",
+                section=stype,
+                max_repeats=max_repeats,
+                penalty_score=2.0,
+            )
         elif max_repeats == 2:
             score = 3.0  # Первый повтор
             has_repeat_penalty = True
+            log.info(
+                "section_penalty_applied",
+                section=stype,
+                max_repeats=max_repeats,
+                penalty_score=3.0,
+            )
         else:
             # Повторов нет. Считаем обычные нарушения (долю)
             total_q = len(data["items"])
             bad_q = sum(1 for i in data["items"] if not i.is_compliant)
             score = (
                 round(6.0 * ((total_q - bad_q) / total_q), 2) if total_q > 0 else 6.0
+            )
+            log.info(
+                "section_score_calculated_normal",
+                section=stype,
+                total_q=total_q,
+                bad_q=bad_q,
+                score=score,
             )
 
         # Сохраняем балл Раздела в БД
@@ -792,6 +821,9 @@ def calculate_inspection_score(inspection):
 
     if not report_scores_data:
         final_report_score = 6.0  # Если отчет состоял только из B1 или D
+        log.warning(
+            "no_qualifying_sections_for_final_score", default_score=final_report_score
+        )
     else:
         # Проверяем жесткое правило: Если хоть один раздел (A, B2, C) получил 3 или 2,
         # то весь отчет получает этот низший балл!
@@ -802,15 +834,28 @@ def calculate_inspection_score(inspection):
             # Если есть штрафы (3.0 или 2.0), берем самый жесткий (минимальный)
             # ТЗ: "Если было повторяющиеся нарушение... просто ставится общая оценка 3/2"
             final_report_score = min(penalties)
+            log.info(
+                "final_score_dropped_due_to_penalty",
+                penalties=penalties,
+                final_score=final_report_score,
+            )
         else:
             # Если штрафов за повтор нет -> просто считаем честное среднее
             # (даже если там есть 1.0 за кучу новых нарушений)
             all_scores = [d["score"] for d in report_scores_data]
             final_report_score = sum(all_scores) / len(all_scores)
+            log.info(
+                "final_score_calculated_average",
+                all_scores=all_scores,
+                final_score=final_report_score,
+            )
 
     # Сохраняем балл Отчета в БД
-    inspection.final_score = round(final_report_score, 2)
+    final_report_score = round(final_report_score, 2)
+    inspection.final_score = final_report_score
     inspection.save(update_fields=["final_score"])
+
+    log.info("inspection_score_calculation_completed", final_score=final_report_score)
 
     return inspection.final_score
 
@@ -819,6 +864,12 @@ def calculate_daily_location_scores(target_date):
     """
     ЭТАП 3: Высчитываем итоговый балл каждого УЧАСТКА за день.
     """
+    log = logger.bind(
+        service="calc_daily_location_scores",
+        target_date=str(target_date),
+    )
+    log.info("daily_location_score_calculation_started")
+
     locations = Location.objects.all()
 
     # 1. ГЛОБАЛЬНЫЙ B1 (Для ЭМО)
@@ -833,10 +884,19 @@ def calculate_daily_location_scores(target_date):
         min_b1 = all_b1_scores.aggregate(Min("score"))["score__min"]
         if min_b1 <= 3.01:
             global_b1_score = min_b1
+            log.info(
+                "global_b1_penalty_applied",
+                min_b1=min_b1,
+                global_b1_score=global_b1_score,
+            )
         else:
             global_b1_score = all_b1_scores.aggregate(Avg("score"))["score__avg"]
+            log.info("global_b1_average_calculated", avg_score=global_b1_score)
+    else:
+        log.warning("no_b1_scores_found_for_date")
 
     # 2. РАСЧЕТ БАЛЛОВ УЧАСТКОВ
+    processed_count = 0
     for loc in locations:
         final_loc_score = None
 
@@ -852,10 +912,29 @@ def calculate_daily_location_scores(target_date):
             # Считаем среднее между D и глобальным B1
             if score_d is not None and global_b1_score is not None:
                 final_loc_score = (score_d + global_b1_score) / 2
+                log.info(
+                    "emo_score_calculated_combined",
+                    location=loc.name,
+                    score_d=score_d,
+                    global_b1=global_b1_score,
+                    final_score=final_loc_score,
+                )
             elif score_d is not None:
                 final_loc_score = score_d
+                log.info(
+                    "emo_score_calculated_d_only",
+                    location=loc.name,
+                    score_d=score_d,
+                    final_score=final_loc_score,
+                )
             elif global_b1_score is not None:
                 final_loc_score = global_b1_score
+                log.info(
+                    "emo_score_calculated_b1_only",
+                    location=loc.name,
+                    global_b1=global_b1_score,
+                    final_score=final_loc_score,
+                )
 
         # --- ЛОГИКА ОСТАЛЬНЫХ УЧАСТКОВ (УПП, Сборка, Инструментальный...) ---
         else:
@@ -871,17 +950,28 @@ def calculate_daily_location_scores(target_date):
                 # Просто считаем среднее арифметическое отчетов (например, 4-х отчетов УПП)
                 scores = [insp.final_score for insp in inspections]
                 final_loc_score = sum(scores) / len(scores)
+                log.info(
+                    "standard_location_score_calculated",
+                    location=loc.name,
+                    inspections_count=len(scores),
+                    scores_list=scores,
+                    final_score=final_loc_score,
+                )
 
         # 3. СОХРАНЯЕМ БАЛЛ УЧАСТКА В БД
-        LocationDailyScore.objects.update_or_create(
-            location=loc,
-            date=target_date,
-            defaults={
-                "score": round(final_loc_score, 2)
-                if final_loc_score is not None
-                else None
-            },
-        )
+        if final_loc_score is not None:
+            final_loc_score_rounded = round(final_loc_score, 2)
+            LocationDailyScore.objects.update_or_create(
+                location=loc,
+                date=target_date,
+                defaults={"score": final_loc_score_rounded},
+            )
+            processed_count += 1
+
+    log.info(
+        "daily_location_score_calculation_completed",
+        updated_locations_count=processed_count,
+    )
 
 
 def is_working_day(target_date):

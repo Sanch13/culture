@@ -85,9 +85,15 @@
 
                         <!-- ДЕЙСТВИЕ -->
                         <td>
-                            <a href="{% url 'admin_report_detail' inspection.id %}" class="btn btn-sm btn-light border shadow-sm">
-                                Открыть
-                            </a>
+                            <div class="btn-group text-nowrap gap-2" role="group">
+                                <a href="{% url 'admin_report_detail' inspection.id %}" class="btn btn-sm btn-light border shadow-sm" title="Просмотр">
+                                    Открыть
+                                </a>
+                                <!-- НОВАЯ КНОПКА РЕДАКТИРОВАНИЯ -->
+                                <a href="{% url 'admin_inspection_edit' inspection.id %}" class="btn btn-sm btn-light shadow-sm" title="Редактировать отчет">
+                                    Редактировать
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

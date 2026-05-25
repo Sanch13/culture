@@ -1,0 +1,132 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Редактирование отчета #{{ inspection.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Редактирование отчета #{{ inspection.id }}</h1>
+        <div class="text-muted small">
+            Участок: {{ inspection.location_snapshot }} | Шаблон: {{ inspection.template.name }} | Дата: {{ inspection.date_check|date:"d.m.Y" }}
+        </div>
+    </div>
+    <a href="{% url 'admin_history' %}" class="btn btn-secondary">Отмена</a>
+</div>
+
+<div class="alert alert-warning shadow-sm">
+    <i class="bi bi-exclamation-triangle"></i> <strong>Внимание!</strong> Изменение статусов или удаление фотографий приведет к автоматическому пересчету баллов отчета и всего участка за эту дату.
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    {% for section_name, items in sections_data.items %}
+    <div class="card mb-4 shadow-sm border-0">
+        <div class="card-header bg-white fw-bold py-3 text-primary border-bottom-0">
+            {{ section_name }}
+        </div>
+
+        <div class="card-body p-0 border-top">
+            {% for item in items %}
+            <div class="p-3 border-bottom {% if not item.is_compliant %}bg-danger bg-opacity-10{% endif %}" id="item-row-{{ item.id }}">
+
+                <div class="mb-2 fw-medium">
+                    <span class="text-muted me-1">{{ forloop.counter }}.</span> {{ item.criteria_text }}
+                </div>
+
+                <div class="row g-3 align-items-start mt-1">
+                    <!-- СТАТУС -->
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Статус:</label>
+                        <select name="status_{{ item.id }}" class="form-select border-secondary">
+                            <option value="true" {% if item.is_compliant %}selected{% endif %}>ОК (Соответствует)</option>
+                            <option value="false" {% if not item.is_compliant %}selected{% endif %}>Несоответствие</option>
+                        </select>
+
+                        <div class="form-check mt-2">
+                            <input class="form-check-input border-danger" type="checkbox" name="repeated_{{ item.id }}" id="rep_{{ item.id }}" {% if item.is_repeated_violation %}checked{% endif %}>
+                            <label class="form-check-label text-danger small fw-bold" for="rep_{{ item.id }}">
+                                Повторное нарушение
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- КОММЕНТАРИЙ -->
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold text-muted mb-1">Комментарий:</label>
+                        <textarea name="comment_{{ item.id }}" class="form-control" rows="3">{{ item.comment|default:"" }}</textarea>
+                    </div>
+
+                    <!-- ФОТОГРАФИИ -->
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted mb-1">Фотографии:</label>
+                        <div class="d-flex flex-wrap gap-2" id="photo-container-{{ item.id }}">
+                            {% for photo in item.photos.all %}
+                                <div class="position-relative" id="photo-wrapper-{{ photo.id }}">
+                                    <!-- Можно подключить fancybox по желанию, здесь просто миниатюра -->
+                                    <img src="{{ photo.image.url }}" class="rounded shadow-sm" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #ccc;">
+
+                                    <!-- КНОПКА УДАЛЕНИЯ -->
+                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 p-0 rounded-circle"
+                                            style="width: 24px; height: 24px;"
+                                            onclick="deletePhotoAdmin({{ photo.id }})" title="Удалить фото">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            {% empty %}
+                                <span class="text-muted small">Нет прикрепленных фото.</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- ПЛАВАЮЩИЙ БЛОК СОХРАНЕНИЯ -->
+    <div class="position-sticky bottom-0 bg-white p-3 border-top shadow text-center" style="z-index: 1000;">
+        <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold">Сохранить изменения и пересчитать баллы</button>
+    </div>
+</form>
+
+<!-- ПРОСТОЙ СКРИПТ ДЛЯ УДАЛЕНИЯ ФОТО -->
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    function deletePhotoAdmin(photoId) {
+        if (!confirm('Вы уверены, что хотите безвозвратно удалить это фото?')) return;
+
+        fetch(`/api/del-photo/${photoId}/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                const wrapper = document.getElementById(`photo-wrapper-${photoId}`);
+                if (wrapper) wrapper.remove();
+            } else {
+                alert('Ошибка при удалении фото');
+            }
+        })
+        .catch(err => console.error(err));
+    }
+</script>
+{% endblock %}

@@ -27,7 +27,7 @@ from checklists.models import (
     InspectionRoute,
     Location,
 )
-from checklists.tasks import notify_user_about_swap
+from checklists.tasks import notify_user_about_swap, task_calculate_score
 
 User = get_user_model()
 
@@ -534,3 +534,64 @@ def admin_violations_report_page(request):
         "default_end": today.strftime("%Y-%m-%d"),
     }
     return render(request, "checklists/management_violations_report.html", context)
+
+
+@admin_required
+def admin_inspection_edit_view(request, inspection_id):
+    """Страница редактирования завершенного отчета администратором"""
+    inspection = get_object_or_404(Inspection, id=inspection_id, is_completed=True)
+
+    if request.method == "POST":
+        # 1. Пробегаемся по всем пунктам и обновляем данные из формы
+        for item in inspection.items.all():
+            # Получаем статус (true = ОК, false = Нарушение)
+            status_val = request.POST.get(f"status_{item.id}")
+            if status_val in ["true", "false"]:
+                item.is_compliant = status_val == "true"
+
+            # Получаем комментарий
+            comment_val = request.POST.get(f"comment_{item.id}")
+            if comment_val is not None:
+                item.comment = comment_val.strip()
+
+            # Получаем чекбокс "Повторное нарушение"
+            # Если чекбокс не нажат, в POST его не будет, поэтому проверяем наличие
+            is_repeated = request.POST.get(f"repeated_{item.id}") == "on"
+            item.is_repeated_violation = is_repeated
+
+            item.save()
+
+        # 2. Магия: Запускаем Celery-таску на пересчет баллов
+        # Так как архитектура идемпотентна, таска удалит старые баллы разделов и создаст новые
+        task_calculate_score.delay(inspection.id)
+
+        messages.success(
+            request,
+            f"Отчет #{inspection.id} успешно изменен. Баллы отправлены на пересчет в фоне.",
+        )
+        return redirect("admin_history")
+
+    # --- ЛОГИКА ОТОБРАЖЕНИЯ (GET) ---
+    items = list(inspection.items.select_related("criteria_origin__section").all())
+    items.sort(
+        key=lambda i: (
+            i.criteria_origin.section.order
+            if i.criteria_origin and i.criteria_origin.section
+            else 9999,
+            i.criteria_order,
+        )
+    )
+
+    # Группируем по разделам для шаблона
+    sections_data = {}
+    for item in items:
+        sec_name = item.section_name
+        if sec_name not in sections_data:
+            sections_data[sec_name] = []
+        sections_data[sec_name].append(item)
+
+    context = {
+        "inspection": inspection,
+        "sections_data": sections_data,
+    }
+    return render(request, "checklists/admin_inspection_edit.html", context)
