@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import structlog
+
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -31,65 +33,67 @@ from checklists.tasks import (
 
 User = get_user_model()
 
+logger = structlog.get_logger(__name__)
+
 
 # --- ЗОНА СОТРУДНИКА (Строгий режим) ---
 @employee_required
 def employee_dashboard(request):
     user = request.user
     today = timezone.now().date()
+    current_weekday = today.weekday()
 
     # Праздники (если используешь)
     # by_holidays = holidays.BY()
     # holiday_name = by_holidays.get(today)
 
     # 1. Вычисляем конец недели
-    days_until_sunday = 6 - today.weekday()
+    days_until_sunday = 6 - current_weekday
     end_of_week = today + timedelta(days=days_until_sunday)
 
-    # 2. Ищем ВСЕ задания на этой неделе
-    # Убираем .first(), берем весь список .all() (или просто без метода, т.к. это QuerySet)
-    week_schedule = (
-        Schedule.objects.filter(inspector=user, date__range=[today, end_of_week])
+    # НОВОВВЕДЕНИЕ: Если сегодня Пт, Сб или Вс -> расширяем горизонт на +7 дней (следующая неделя)
+    search_end_date = end_of_week
+    if current_weekday >= 4:  # 4 это Пятница
+        search_end_date = end_of_week + timedelta(days=7)
+
+    # 2. Ищем ВСЕ задания в рамках вычисленного окна
+    upcoming_schedule = (
+        Schedule.objects.filter(inspector=user, date__range=[today, search_end_date])
         .select_related("template", "inspection")
         .order_by("date")
     )
 
     # 3. Разделяем логику: "Сегодня" vs "Будущее"
+    today_tasks = [t for t in upcoming_schedule if t.date == today]
 
-    # Список задач СТРОГО на сегодня
-    today_tasks = [t for t in week_schedule if t.date == today]
+    # Считаем оставшиеся задачи на СЕГОДНЯ
+    remaining_tasks_count = sum(
+        1 for t in today_tasks if not t.inspection or not t.inspection.is_completed
+    )
 
-    # СЧИТАЕМ ОСТАВШИЕСЯ (НЕЗАВЕРШЕННЫЕ) ЗАДАЧИ:
-    remaining_tasks_count = 0
-    if today_tasks:
-        for t in today_tasks:
-            # Если отчета нет вообще (еще не начат) ИЛИ он начат, но не завершен
-            if not t.inspection or not t.inspection.is_completed:
-                remaining_tasks_count += 1
-
-    # ПРОВЕРКА ДЛЯ КНОПКИ АВТОЗАМЕНЫ
-    # Можно ли сегодня меняться? (Только если ни один отчет еще не начат)
+    # Проверка для кнопки автозамены СЕГОДНЯ
     can_swap_today = False
     if today_tasks:
         can_swap_today = not any(t.inspection for t in today_tasks)
 
-    # Ближайшая будущая задача (для отображения "Ждите до четверга")
-    # Берем первую задачу, дата которой больше сегодня
+    # Ищем ПЕРВУЮ дату в БУДУЩЕМ (Завтра или следующая неделя)
     future_tasks = []
     days_until = 0
+    can_swap_future = False
+    first_future_date = None
 
-    if not today_tasks:
-        # Ищем первую дату в будущем, на которую есть задачи
-        first_future_date = None
-        for t in week_schedule:
-            if t.date > today:
-                first_future_date = t.date
-                days_until = (t.date - today).days
-                break
+    # Пробегаемся по всему списку, чтобы найти следующую ближайшую дату
+    for t in upcoming_schedule:
+        if t.date > today:
+            first_future_date = t.date
+            days_until = (t.date - today).days
+            break
 
-        # Если нашли дату - собираем ВСЕ задачи на эту дату
-        if first_future_date:
-            future_tasks = [t for t in week_schedule if t.date == first_future_date]
+    # Если мы нашли будущую дату, собираем все задачи на этот день
+    if first_future_date:
+        future_tasks = [t for t in upcoming_schedule if t.date == first_future_date]
+        # Меняться в будущем можно, если ни один отчет из будущих задач еще не начат
+        can_swap_future = not any(t.inspection for t in future_tasks)
 
     # 4. История
     my_inspections = Inspection.objects.filter(inspector=user).order_by("-created_at")[
@@ -97,13 +101,15 @@ def employee_dashboard(request):
     ]
 
     context = {
-        "today_tasks": today_tasks,  # СПИСОК (может быть пустым)
+        "today_tasks": today_tasks,
         "can_swap_today": can_swap_today,
+        "remaining_tasks_count": remaining_tasks_count,
+        # НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ БУДУЩИХ СМЕН
         "future_tasks": future_tasks,
         "days_until": days_until,
+        "can_swap_future": can_swap_future,  # Флаг для отображения кнопки
+        "first_future_date": first_future_date,  # Дата для передачи в API автозамены
         "my_inspections": my_inspections,
-        "remaining_tasks_count": remaining_tasks_count,
-        # "holiday_name": holiday_name,
     }
     return render(request, "checklists/employee_dashboard.html", context)
 
@@ -298,9 +304,18 @@ def start_inspection_view(request, template_id):
 @employee_required
 @require_POST
 def auto_swap_shift(request, schedule_id):
+    log = logger.bind(
+        service="auto_swap_shift",
+        requestor_id=request.user.id,
+        schedule_id=schedule_id,
+    )
+
+    log.info("auto_swap_request_received", action="start")
+
     schedule_item = get_object_or_404(Schedule, id=schedule_id, inspector=request.user)
 
     if schedule_item.inspection:
+        log.warning("auto_swap_rejected", reason="inspection_already_started")
         messages.error(request, "Нельзя отказаться от начатого задания.")
         return redirect("employee_dashboard")
 
@@ -308,12 +323,18 @@ def auto_swap_shift(request, schedule_id):
     reason_type = request.POST.get("reason_type")
     reason_text = request.POST.get("reason", "").strip()
 
+    log = log.bind(reason_type=reason_type)
+
     # Валидация на сервере (защита от умников)
     if not reason_type:
+        log.warning("auto_swap_validation_failed", error="missing_reason_type")
         messages.error(request, "Выберите тип причины из списка.")
         return redirect("employee_dashboard")
 
     if reason_type == "other" and not reason_text:
+        log.warning(
+            "auto_swap_validation_failed", error="missing_reason_text_for_other"
+        )
         messages.error(
             request, "При выборе 'Другая причина' необходимо написать комментарий!"
         )
@@ -322,12 +343,15 @@ def auto_swap_shift(request, schedule_id):
     # Сохраняем дату для уведомлений ДО того, как объект изменится
     current_date_str = schedule_item.date.strftime("%Y-%m-%d")
 
+    log.info("auto_swap_calling_service")
+
     # Вызываем сервис
     success, message, info_about_change = perform_auto_swap(
         schedule_item, reason_type, reason_text
     )
 
     if success:
+        log.info("auto_swap_service_success")
         messages.success(request, message)
 
         # Нам нужно узнать ID жертвы (мы можем получить его из БД,
@@ -335,11 +359,18 @@ def auto_swap_shift(request, schedule_id):
         schedule_item.refresh_from_db()  # Подтягиваем новые данные
         target_user_id = schedule_item.inspector.id
 
+        log.info(
+            "auto_swap_dispatching_notifications",
+            target_user_id=target_user_id,
+            target_date=current_date_str,
+        )
+
         # Шлем письмо жертве ("Выходи сегодня!")
         notify_user_about_swap.delay(current_date_str, target_user_id)
         notify_admin_about_swap.delay(info_about_change)
 
     else:
+        log.error("auto_swap_service_failed", error_message=message)
         messages.error(request, message)
 
     return redirect("employee_dashboard")
@@ -360,7 +391,9 @@ def management_violations_report_page(request):
         "default_start": week_ago.strftime("%Y-%m-%d"),
         "default_end": today.strftime("%Y-%m-%d"),
     }
-    return render(request, "checklists/management_violations_report.html", context)
+    return render(
+        request, "checklists/management_violations_report_no_admin.html", context
+    )
 
 
 @management_required

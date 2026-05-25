@@ -13,6 +13,7 @@ from checklists.models import (
     InspectionItem,
     Schedule,
 )
+from checklists.services.cascade_shift_schedule import cascade_shift_schedule
 from checklists.utils import compress_image
 from checklists.decorators import employee_required, admin_required
 from checklists.services.services import format_size, get_file_extension
@@ -285,3 +286,44 @@ def api_get_violations_report(request):
         return JsonResponse({"status": "ok", "report": report_data})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@admin_required
+@require_POST
+def api_cascade_shift(request, schedule_id):
+    is_silent_str = request.POST.get("is_silent", "true")
+    is_silent = is_silent_str.lower() == "true"
+
+    log = logger.bind(
+        service="api_cascade_shift", schedule_id=schedule_id, is_silent=is_silent
+    )
+    # Находим задачу, по которой кликнул Админ
+    schedule_item = get_object_or_404(Schedule, id=schedule_id)
+
+    log.info("[API] Удаление проверяющего из расписания", schedule_item=schedule_item)
+
+    # Запрещаем трогать прошлое
+    if schedule_item.date < timezone.now().date():
+        return JsonResponse(
+            {"status": "error", "message": "Нельзя изменить прошлые дни."}
+        )
+
+    # Запрещаем трогать начатое
+    if schedule_item.inspection:
+        return JsonResponse({"status": "error", "message": "Отчет уже начат."})
+
+    target_date = schedule_item.date
+    user_to_remove = schedule_item.inspector
+
+    # Вызываем магию
+    success, message = cascade_shift_schedule(
+        target_date=target_date,
+        user_to_remove=user_to_remove,
+        requestor=request.user,
+        is_silent=is_silent,
+    )
+
+    if success:
+        return JsonResponse({"status": "ok", "message": message})
+    else:
+        return JsonResponse({"status": "error", "message": message})

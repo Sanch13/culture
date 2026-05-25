@@ -241,7 +241,7 @@ def notify_user_about_swap(self, date_str, user_id):
         data = get_swap_notification_data(date_str, user_id)
 
         if not data:
-            log.warning("notification_data_empty - Данные не найдены")
+            log.warning("notification_data_empty - Данные не найдены", data=data)
             return "No email data found"
 
         log.info(

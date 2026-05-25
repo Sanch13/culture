@@ -135,14 +135,15 @@
 
 
     {% elif future_tasks %}
-        <!-- СЦЕНАРИЙ: БУДУЩЕЕ (Сегодня пусто, но на этой неделе есть проверка) -->
-        <div class="alert text-center p-5 border shadow-sm mb-5 bg-white"> <!-- Заменил alert-primary на bg-white для чистоты -->
+        <!-- СЦЕНАРИЙ: БУДУЩЕЕ (Сегодня пусто, но на этой или следующей неделе есть проверка) -->
+        <div class="alert text-center p-5 border shadow-sm mb-5 bg-white">
 
             <h3 class="text-miran mb-4">Сегодня заданий нет</h3>
 
             <div class="mb-4">
                 <p class="text-muted mb-1">Ближайшая проверка:</p>
-                <p class="fs-4 fw-bold text-dark mb-0">{{ future_tasks.0.date|date:"l, d E" }}</p> <!-- Берем дату из первого элемента -->
+                <!-- Выводим дату красиво -->
+                <p class="fs-4 fw-bold text-dark mb-0">{{ future_tasks.0.date|date:"l, d E" }}</p>
                 <p class="text-muted small">(Через {{ days_until }} дн.)</p>
             </div>
 
@@ -156,7 +157,6 @@
                                 <strong>{{ task.template.name }}</strong><br>
                                 <small class="text-muted">{{ task.template.location.name }}</small>
                             </div>
-                            <i class="text-muted"></i>
                         </li>
                     {% endfor %}
                 </ul>
@@ -164,77 +164,85 @@
 
             <hr class="my-4" style="max-width: 400px; margin: 0 auto;">
 
-            <!-- КНОПКА АВТОЗАМЕНЫ ДЛЯ БУДУЩЕЙ ПРОВЕРКИ -->
-            <div class="w-100 mt-4 mx-auto" style="max-width: 400px;">
-                <button type="button" class="btn btn-outline-danger btn-lg w-100 fw-bold shadow-sm"
-                        data-bs-toggle="modal" data-bs-target="#swapFutureModal">
-                    Не могу выполнить проверку (Автозамена)
-                </button>
-            </div>
+            <!-- ======================================================== -->
+            <!-- НОВОЕ: ПРОВЕРКА ФЛАГА can_swap_future ОТ БЭКЕНДА         -->
+            <!-- ======================================================== -->
+            {% if can_swap_future %}
+                <!-- КНОПКА АВТОЗАМЕНЫ ДЛЯ БУДУЩЕЙ ПРОВЕРКИ -->
+                <div class="w-100 mt-4 mx-auto" style="max-width: 400px;">
+                    <button type="button" class="btn btn-outline-danger btn-lg w-100 fw-bold shadow-sm"
+                            data-bs-toggle="modal" data-bs-target="#swapFutureModal">
+                        Не могу выполнить проверку (Автозамена)
+                    </button>
+                </div>
 
-            <!-- МОДАЛКА ДЛЯ БУДУЩЕЙ ПРОВЕРКИ -->
-            <div class="modal fade" id="swapFutureModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
+                <!-- МОДАЛКА ДЛЯ БУДУЩЕЙ ПРОВЕРКИ -->
+                <div class="modal fade" id="swapFutureModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
 
-                        <div class="modal-header bg-danger text-white">
-                            <h5 class="modal-title">Не могу провести проверку</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
+                            <div class="modal-header bg-danger text-white">
+                                <h5 class="modal-title">Не могу провести проверку</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
 
-                        <!-- Передаем ID будущей задачи (future_tasks.0.id) -->
-                        <form action="{% url 'auto_swap_shift' future_tasks.0.id %}" method="post">
-                            {% csrf_token %}
-                            <div class="modal-body text-start text-dark">
+                            <form action="{% url 'auto_swap_shift' future_tasks.0.id %}" method="post">
+                                {% csrf_token %}
+                                <div class="modal-body text-start text-dark">
 
-                                {% if future_tasks|length > 1 %}
-                                    <div class="alert alert-warning small">
-                                        <i class="bi bi-exclamation-triangle-fill"></i>
-                                        Вы отказываетесь от <strong>ВСЕХ ({{ future_tasks|length }})</strong> проверок, назначенных на {{ future_tasks.0.date|date:"d.m" }}.
+                                    {% if future_tasks|length > 1 %}
+                                        <div class="alert alert-warning small">
+                                            <i class="bi bi-exclamation-triangle-fill"></i>
+                                            Вы отказываетесь от <strong>ВСЕХ ({{ future_tasks|length }})</strong> проверок, назначенных на {{ future_tasks.0.date|date:"d.m.Y" }}.
+                                        </div>
+                                    {% else %}
+                                        <p>Вы собираетесь перенести проверку, назначенную на <strong>{{ future_tasks.0.date|date:"l, d.m.Y" }}</strong>.</p>
+                                    {% endif %}
+
+                                    <div class="mb-3">
+                                        <label for="reasonTypeSelectFuture" class="form-label fw-bold">Укажите причину (Обязательно):</label>
+                                        <select class="form-select" name="reason_type" id="reasonTypeSelectFuture" required
+                                                onchange="toggleReasonTextFuture(this)">
+                                            <option value="" disabled selected>Выберите из списка...</option>
+                                            <option value="vacation">Трудовой отпуск</option>
+                                            <option value="trip">Командировка</option>
+                                            <option value="sick">Больничный лист</option>
+                                            <option value="other">Другая причина (указать)</option>
+                                        </select>
                                     </div>
-                                {% else %}
-                                    <p>Вы собираетесь перенести проверку, назначенную на <strong>{{ future_tasks.0.date|date:"l, d.m.Y" }}</strong>.</p>
-                                {% endif %}
 
-                                <!-- Выбор причины (Обрати внимание на 'this' и уникальные ID) -->
-                                <div class="mb-3">
-                                    <label for="reasonTypeSelectFuture" class="form-label fw-bold">Укажите причину (Обязательно):</label>
-                                    <select class="form-select" name="reason_type" id="reasonTypeSelectFuture" required
-                                            onchange="toggleReasonTextFuture(this)">
-                                        <option value="" disabled selected>Выберите из списка...</option>
-                                        <option value="vacation">Трудовой отпуск</option>
-                                        <option value="trip">Командировка</option>
-                                        <option value="sick">Больничный лист</option>
-                                        <option value="other">Другая причина (указать)</option>
-                                    </select>
+                                    <div class="mb-3" id="reasonTextContainerFuture" style="display: none;">
+                                        <label for="reasonTextFuture" class="form-label text-muted small mb-1">Опишите причину:</label>
+                                        <textarea class="form-control" name="reason" id="reasonTextFuture" rows="2"
+                                                  placeholder="Укажите подробности..."></textarea>
+                                    </div>
+
                                 </div>
 
-                                <!-- Текстовое поле (Скрыто по умолчанию) -->
-                                <div class="mb-3" id="reasonTextContainerFuture" style="display: none;">
-                                    <label for="reasonTextFuture" class="form-label text-muted small mb-1">Опишите причину:</label>
-                                    <textarea class="form-control" name="reason" id="reasonTextFuture" rows="2"
-                                              placeholder="Укажите подробности..."></textarea>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                    <button type="submit" class="btn btn-danger">Подтвердить замену</button>
                                 </div>
-
-                            </div>
-
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                <button type="submit" class="btn btn-danger">Подтвердить замену</button>
-                            </div>
-                        </form>
-
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
+            {% else %}
+                <!-- Если каким-то чудом будущая проверка уже начата -->
+                <div class="text-center text-muted small mt-4">
+                    <i class="bi bi-lock-fill"></i> Проверка уже начата. Автозамена недоступна.
+                </div>
+            {% endif %}
 
         </div>
-        <!-- ДОБАВЛЯЕМ ELSE ДЛЯ ПУСТОЙ НЕДЕЛИ -->
+
+    <!-- ДОБАВЛЯЕМ ELSE ДЛЯ ПУСТОЙ НЕДЕЛИ -->
     {% else %}
+        <!-- НЕМНОГО ИЗМЕНИЛИ ТЕКСТ, так как теперь горизонт шире -->
         <div class="alert alert-light text-center p-5 border shadow-sm mb-5 mt-4">
             <h1 class="text-muted display-4">☕️</h1>
             <h3>На этой неделе проверок нет</h3>
-            <p class="text-muted">Расписание на следующую неделю будет сформировано позже.</p>
+            <p class="text-muted">Отдыхайте! Расписание обновится позже.</p>
         </div>
     {% endif %}
 

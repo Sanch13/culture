@@ -109,4 +109,9 @@ urlpatterns = [
         views.api_get_violations_report,
         name="api_violations_report",
     ),
+    path(
+        "api/admin/cascade-shift/<int:schedule_id>/",
+        views.api_cascade_shift,
+        name="api_cascade_shift",
+    ),
 ]
