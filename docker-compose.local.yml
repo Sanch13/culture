@@ -21,6 +21,7 @@ services:
       - ./fixtures:/app/fixtures
       - ./media:/app/media
       - ./manage.py:/app/manage.py
+      - ./tests:/app/tests
     command: [
       "uv",
       "run",

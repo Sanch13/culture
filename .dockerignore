@@ -26,9 +26,11 @@ nginx/
 # Static
 static/
 fixtures/
+tests/
 
 observability/
 docs/
+shell_scripts/
 
 # Private keys and certificates
 *.pem

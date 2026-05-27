@@ -12,7 +12,6 @@ from celery import shared_task
 from checklists.models import Inspection
 from checklists.utils import send_message
 from checklists.services.services import (
-    generate_schedule,
     prepare_daily_notifications,
     get_swap_notification_data,
     calculate_inspection_score,
@@ -21,6 +20,7 @@ from checklists.services.services import (
     prepare_monday_reminders,
     prepare_overdue_notifications,
 )
+from checklists.services.gen_schedule_with_balance import generate_schedule
 
 User = get_user_model()
 

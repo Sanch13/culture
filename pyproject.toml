@@ -40,3 +40,9 @@ build-backend = "hatchling.build"
 packages = [
     "src/config",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.3",
+    "pytest-django==4.12.0",
+]

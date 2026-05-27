@@ -12,6 +12,8 @@ from checklists.models import (
     Schedule,
     InspectionRoute,
     CalendarOverride,
+    InspectorRouteStat,
+    ScheduleGeneratorState,
 )
 
 
@@ -147,3 +149,38 @@ class ScheduleAdmin(admin.ModelAdmin):
 class CalendarOverrideAdmin(admin.ModelAdmin):
     list_display = ("date", "day_type", "description")
     list_filter = ("day_type", "date")
+
+
+@admin.register(InspectorRouteStat)
+class InspectorRouteStatAdmin(admin.ModelAdmin):
+    """
+    Панель управления статистикой посещений маршрутов.
+    Позволяет администратору вручную корректировать счетчики для балансировки генератора.
+    """
+
+    # 1. Какие колонки показывать в общем списке
+    list_display = ("inspector", "route", "visits_count")
+
+    # 2. САМОЕ ВАЖНОЕ: Разрешаем редактировать visits_count прямо из списка!
+    # Не нужно проваливаться внутрь записи, просто вбил цифру и нажал "Сохранить"
+    list_editable = ("visits_count",)
+
+    # 3. Фильтры справа (Удобно нажать "Показать только Раздув")
+    list_filter = ("route", "inspector")
+
+    # 4. Поиск (Удобно вбить фамилию)
+    search_fields = ("inspector__last_name", "inspector__first_name", "route__title")
+
+    # 5. Оптимизация запросов (чтобы админка не тормозила при 1000 записей)
+    list_select_related = ("inspector", "route")
+
+    # 6. Сортировка по умолчанию (Сначала показываем самых частых ходоков)
+    ordering = ("-visits_count", "inspector")
+
+    # Опционально: Пагинация (сколько записей на страницу)
+    list_per_page = 50
+
+
+@admin.register(ScheduleGeneratorState)
+class ScheduleGeneratorStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "last_user_id")
