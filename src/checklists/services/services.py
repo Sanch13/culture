@@ -1,5 +1,6 @@
 import calendar
 import datetime
+from collections import defaultdict
 from pathlib import Path
 from itertools import groupby
 
@@ -23,6 +24,7 @@ from checklists.models import (
     LocationDailyScore,
     CalendarOverride,
     ScheduleGeneratorState,
+    InspectorRouteStat,
 )
 from checklists.utils import format_phone_number
 
@@ -1473,3 +1475,114 @@ def get_file_extension(filename):
     if not filename:
         return "unknown"
     return Path(filename).suffix.lower().lstrip(".") or "unknown"
+
+
+def _determine_start_index(state_last_user_id, inspectors):
+    """
+    Определяет индекс инспектора, с которого начнется генерация расписания.
+    Учитывает крайние случаи: увольнение сотрудника из середины или конца списка.
+    """
+    log = logger.bind(
+        service="_determine_start_index - Определяем индекс инспектора с которого начнем генерацию расписания"
+    )
+
+    if state_last_user_id <= 0:
+        log.info("queue_state_initial_start")
+        return 0
+
+    # 1. Идеальный сценарий: предыдущий инспектор всё еще работает
+    for idx, inspector in enumerate(inspectors):
+        if inspector.id == state_last_user_id:
+            start_index = (idx + 1) % len(inspectors)
+            log.info(
+                "queue_state_found",
+                last_user_id=state_last_user_id,
+                next_index=start_index,
+            )
+            return start_index
+
+    # 2. Критический случай: предыдущий инспектор удален/уволен (не найден в inspectors)
+    log.warning(
+        "queue_state_user_missing",
+        missing_user_id=state_last_user_id,
+        reason="user_not_in_active_list",
+    )
+
+    # Ищем первого выжившего, чей ID больше уволенного
+    for idx, inspector in enumerate(inspectors):
+        if inspector.id > state_last_user_id:
+            log.info(
+                "queue_state_recovered", next_survivor_id=inspector.id, next_index=idx
+            )
+            return idx  # Начинаем прямо с него
+
+    # 3. Самый крайний случай: уволенный был в самом конце списка.
+    # Значит, следующий за ним - это самый первый человек в списке (индекс 0).
+    log.info("queue_state_reset_to_zero", reason="deleted_user_was_last")
+    return 0
+
+
+def _load_route_statistics() -> tuple[defaultdict, set]:
+    """
+    Загружает исторические счетчики маршрутов из БД в оперативную память.
+    Возвращает:
+    1. stats - двумерный словарь: stats[user_id][route_id] = количество_посещений
+    2. updated_stats_tracker - пустое множество для отслеживания изменений
+    """
+    stats = defaultdict(lambda: defaultdict(int))
+    db_stats = InspectorRouteStat.objects.all()
+
+    for stat in db_stats:
+        stats[stat.inspector_id][stat.route_id] = stat.visits_count
+
+    updated_stats_tracker = set()
+    return stats, updated_stats_tracker
+
+
+def _get_empty_routes_for_date(current_date, routes):
+    """Возвращает список маршрутов, которые еще никем не заняты в этот день."""
+    empty_routes = []
+    for route in routes:
+        templates = route.templates.all()
+        if (
+            templates
+            and not Schedule.objects.filter(
+                date=current_date, template=templates[0]
+            ).exists()
+        ):
+            empty_routes.append(route)
+    return empty_routes
+
+
+def _save_generation_results(
+    created_total,
+    current_inspector_idx,
+    inspectors,
+    state,
+    updated_stats_tracker,
+    stats,
+):
+    """Батчевое сохранение результатов генерации в БД."""
+    log = logger.bind(
+        "_save_generation_results - Сохраняем умную закладку и счетчик посещений маршрутов",
+    )
+    if created_total > 0:
+        # Вычисляем, кто реально получил последнюю задачу
+        # (отнимаем 1, потому что индекс уже сдвинулся на следующего)
+        last_assigned_idx = (current_inspector_idx - 1) % len(inspectors)
+        state.last_user_id = inspectors[last_assigned_idx].id
+        state.save()
+
+        log.info(
+            "Current user and next user - Текущий пользователь (указатель)  и следующий пользователь",
+            current_inspector=inspectors[last_assigned_idx].get_full_name(),
+            next_inspector=inspectors[current_inspector_idx].get_full_name(),
+        )
+
+        # Обновляем счетчики маршрутов
+        for uid, rid in updated_stats_tracker:
+            InspectorRouteStat.objects.update_or_create(
+                inspector_id=uid,
+                route_id=rid,
+                defaults={"visits_count": stats[uid][rid]},
+            )

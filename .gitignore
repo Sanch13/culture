@@ -21,6 +21,7 @@ logs/
 fixtures/
 media/
 static/
+shell_scripts/
 
 # pyenv
 .python-version

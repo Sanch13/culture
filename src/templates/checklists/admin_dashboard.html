@@ -3,8 +3,6 @@
 {% block title %}Дашборд{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">👋 Добро пожаловать, {{ user.get_full_name }}!</h1>
-
 <!-- Карточки статистики (Заглушки) -->
 <div class="row mb-4">
     <div class="col-md-4">
@@ -38,7 +36,90 @@
     </div>
 </div>
 
-<div class="alert alert-info">
-    В этом разделе скоро появятся графики и детальная аналитика по цехам.
+<div class="row">
+    <!-- КОЛОНКА НА ВЕСЬ ЭКРАН (col-12) -->
+    <div class="col-12">
+
+        <!-- БЛОК ФИЛЬТРОВ -->
+        <div class="card shadow-sm mb-3 border-0 bg-light">
+            <div class="card-body">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted mb-1">Период с:</label>
+                        <input type="date" name="start_date" class="form-control" value="{{ filter_start_date }}">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted mb-1">по:</label>
+                        <input type="date" name="end_date" class="form-control" value="{{ filter_end_date }}">
+                    </div>
+
+                    <div class="col-md-4 text-end">
+                        <button type="submit" class="btn btn-primary w-100 fw-bold">
+                            <i class="bi bi-funnel"></i> Применить фильтр
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- КАРТОЧКА РЕЙТИНГА -->
+        <div class="card shadow-sm border-0 mb-5">
+            <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-people-fill text-primary me-2"></i>Сводка выходов на проверки</span>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center text-uppercase text-muted small" style="width: 15%;">Кол-во проверок</th>
+                                <th class="text-uppercase text-muted small">Проверяющие</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- МАГИЯ DJANGO: Группируем QuerySet по полю completed_count -->
+                            {% regroup inspectors_stats by completed_count as grouped_stats %}
+
+                            {% for group in grouped_stats %}
+                            <tr>
+                                <!-- КОЛОНКА 1: Количество -->
+                                <td class="text-center border-end">
+                                    {% if group.grouper > 0 %}
+                                        <span class="badge bg-primary fs-5 px-3 py-2 shadow-sm">{{ group.grouper }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary bg-opacity-25 text-dark fs-5 px-3 py-2">0</span>
+                                    {% endif %}
+                                </td>
+
+                                <!-- КОЛОНКА 2: Список людей (Фамилия И.) -->
+                                <td class="py-3">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        {% for inspector in group.list %}
+                                            <span class="badge bg-light text-dark border p-2" style="font-size: 0.9rem;">
+                                                <i class="bi bi-person text-muted me-1"></i>
+                                                {{ inspector.last_name }} {{ inspector.first_name|slice:":1" }}.
+                                            </span>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center p-5 text-muted">
+                                    Нет активных инспекторов.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-light text-muted small text-center">
+                Отображаются только успешно завершенные проверки за выбранный период.
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

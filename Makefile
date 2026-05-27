@@ -43,11 +43,14 @@ app-dump:
 app-load:
 	@${DC} -f ${LOCAL_FILE} exec ${APP_CONTAINER} sh -c "python manage.py loaddata $(path)"
 
-
 # Создать миграции
-.PHONY: local-migrations # make migrate app="users"
+.PHONY: local-migrations # make migrations app="users"
 local-migrations:
-	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_APP_NAME} python manage.py makemigrations "$(app)"
+ifeq ($(strip $(app)),)
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_APP_NAME} python manage.py makemigrations
+else
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_APP_NAME} python manage.py makemigrations $(app)
+endif
 
 # Применить миграции
 .PHONY: local-migrate
@@ -67,8 +70,9 @@ app-build:
 app-push:
 	@${D} push ${IMAGE}
 
-.PHONY: app-rebuild-push
-app-rebuild-push:
+.PHONY: app-test-rebuild-push
+app-test-rebuild-push:
+	@$(MAKE) test
 	@$(MAKE) app-del
 	@$(MAKE) cash
 	@$(MAKE) app-build
@@ -111,10 +115,11 @@ wait-for-web:
 	@sleep 2
 
 
-# .PHONY: test
-# test:  #  Запускает тесты только в папке tests
-# 	@cd backend && uv run pytest tests && cd ..
-#
+.PHONY: test
+test:
+	@${DC} -f ${LOCAL_FILE} exec ${SERVICE_APP_NAME} uv run pytest tests
+
+# docker compose -f docker-compose.local.yml exec web uv run pytest
 # .PHONY: size
 # size:
 # 	@${D} system df
