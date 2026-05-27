@@ -25,8 +25,7 @@ app.conf.beat_schedule = {
     # Задача 1: Генерация расписания. Запуск каждую пятницу в 14:20
     "generate-schedule-every-friday": {
         "task": "checklists.tasks.task_generate_weekly_schedule",
-        # "schedule": crontab(day_of_week="friday", hour=11, minute=00),
-        "schedule": crontab(day_of_week="wednesday", hour=12, minute=30),
+        "schedule": crontab(day_of_week="friday", hour=11, minute=00),
     },
     # Задача 2: Отправка email админу
     # 'send_admin_email': {

@@ -11,7 +11,7 @@ APP_CONTAINER = web-culture
 SERVICE_APP_NAME = web
 SERVICE_NGINX_NAME = nginx
 SERVICE_CELERY_NAME = celery
-IMAGE = miran2025/culture:0.2.3
+IMAGE = miran2025/culture:0.2.4
 
 .PHONY: app-logs
 app-logs:
@@ -112,7 +112,7 @@ wait-for-web:
 	@while ! ${DC} -f ${PROD_FILE} exec ${SERVICE_APP_NAME} echo "ready" 2>/dev/null; do \
 		sleep 1; \
 	done
-	@sleep 2
+	@sleep 1
 
 
 .PHONY: test
