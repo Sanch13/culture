@@ -31,6 +31,7 @@ tests/
 observability/
 docs/
 shell_scripts/
+pytest.ini
 
 # Private keys and certificates
 *.pem
