@@ -4,19 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('checklists', '0022_inspectorroutestat'),
+        ("checklists", "0022_inspectorroutestat"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='schedulegeneratorstate',
-            options={'verbose_name': 'Состояние генератора', 'verbose_name_plural': 'Состояние генератора'},
+            name="schedulegeneratorstate",
+            options={
+                "verbose_name": "Состояние генератора",
+                "verbose_name_plural": "Состояние генератора",
+            },
         ),
         migrations.AlterField(
-            model_name='schedulegeneratorstate',
-            name='last_user_id',
-            field=models.IntegerField(default=1, verbose_name='ID последнего сотрудника'),
+            model_name="schedulegeneratorstate",
+            name="last_user_id",
+            field=models.IntegerField(
+                default=1, verbose_name="ID последнего сотрудника"
+            ),
         ),
     ]
