@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import structlog
 
@@ -14,11 +14,11 @@ from django.views.decorators.http import require_POST
 
 from checklists.decorators import admin_required
 from checklists.services.services import (
-    generate_schedule,
     apply_inspection_filters_and_paginate,
     analytics_dashboard,
     get_item_history_chain,
 )
+from checklists.services.gen_schedule_with_balance import generate_schedule
 from checklists.models import (
     ChecklistTemplate,
     Inspection,
@@ -37,8 +37,53 @@ logger = structlog.get_logger(__name__)
 # --- ЗОНА АДМИНИСТРАТОРА (Строгий режим) ---
 @admin_required
 def admin_dashboard(request):
+    today = timezone.now().date()
+
+    # 1. Читаем параметры из GET-запроса
+    start_date_str = request.GET.get("start_date")
+    end_date_str = request.GET.get("end_date")
+
+    # 2. Парсим начальную дату (По умолчанию: 1 число текущего месяца)
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            start_date = today.replace(day=1)
+    else:
+        start_date = today.replace(day=1)
+
+    # 3. Парсим конечную дату (По умолчанию: сегодня)
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            end_date = today
+    else:
+        end_date = today
+
+    inspectors_stats = (
+        User.objects.filter(is_active=True, can_perform_inspections=True)
+        .annotate(
+            completed_count=Count(
+                "inspection__date_check",
+                distinct=True,
+                filter=Q(
+                    inspection__is_completed=True,
+                    inspection__date_check__gte=start_date,
+                    inspection__date_check__lte=end_date,
+                ),
+            )
+        )
+        .order_by("-completed_count")
+    )
+
     total_templates = ChecklistTemplate.objects.count()
-    context = {"total_templates": total_templates}
+    context = {
+        "total_templates": total_templates,
+        "filter_start_date": start_date.strftime("%Y-%m-%d"),
+        "filter_end_date": end_date.strftime("%Y-%m-%d"),
+        "inspectors_stats": inspectors_stats,
+    }
     return render(request, "checklists/admin_dashboard.html", context)
 
 

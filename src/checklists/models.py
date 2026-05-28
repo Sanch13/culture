@@ -2,6 +2,10 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
 
 # ==========================================
 # БЛОК 1: КОНФИГУРАЦИЯ (Справочники)
@@ -174,6 +178,32 @@ class InspectionRoute(models.Model):
         ordering = ["order"]
         verbose_name = "Маршрут обхода"
         verbose_name_plural = "Справочник: Маршруты"
+
+
+class InspectorRouteStat(models.Model):
+    """
+    Таблица-счетчик. Хранит информацию о том, сколько раз инспектор
+    был назначен на конкретный маршрут.
+    """
+
+    inspector = models.ForeignKey(
+        to=User,
+        on_delete=models.CASCADE,
+        related_name="route_stats",
+        verbose_name="Проверяющий",
+    )
+    route = models.ForeignKey(
+        to="InspectionRoute", on_delete=models.CASCADE, verbose_name="Маршрут"
+    )
+    visits_count = models.PositiveIntegerField("Количество назначений", default=0)
+
+    class Meta:
+        unique_together = ("inspector", "route")
+        verbose_name = "Статистика инспектора по маршруту"
+        verbose_name_plural = "Статистика по маршрутам"
+
+    def __str__(self):
+        return f"{self.inspector.last_name} -> {self.route.title}: {self.visits_count}"
 
 
 # ==========================================
@@ -471,7 +501,8 @@ class ScheduleGeneratorState(models.Model):
     Гарантирует стабильную очередь, независимую от обмена сменами.
     """
 
-    last_user_id = models.IntegerField("ID последнего сотрудника", default=0)
+    last_user_id = models.IntegerField("ID последнего сотрудника", default=1)
 
     class Meta:
         verbose_name = "Состояние генератора"
+        verbose_name_plural = "Состояние генератора"
