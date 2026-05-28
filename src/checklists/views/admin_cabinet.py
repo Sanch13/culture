@@ -65,7 +65,8 @@ def admin_dashboard(request):
         User.objects.filter(is_active=True, can_perform_inspections=True)
         .annotate(
             completed_count=Count(
-                "inspection",
+                "inspection__date_check",
+                distinct=True,
                 filter=Q(
                     inspection__is_completed=True,
                     inspection__date_check__gte=start_date,
