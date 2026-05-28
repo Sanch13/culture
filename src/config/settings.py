@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     CELERY_ACCEPT_CONTENT: list
     CELERY_TASK_SERIALIZER: str
 
+    REDIS_CACHE_URL: str
+
     MAILCOW_API_URL: str
     MAILCOW_API_KEY: str
 

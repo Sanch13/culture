@@ -3,6 +3,7 @@ from datetime import timedelta, datetime
 import structlog
 
 from django.core.paginator import Paginator
+from django.core.cache import cache
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Count, Q
 from django.db import transaction
@@ -556,7 +557,25 @@ def admin_analytics_dashboard(request):
     year = int(request.GET.get("year", today.year))
     month = int(request.GET.get("month", today.month))
 
-    context = analytics_dashboard(today, year, month)
+    # 1. Придумываем уникальное имя для кэша (Например: "analytics_2026_05")
+    cache_key = f"analytics_{year}_{month:02d}"
+
+    # 2. Пытаемся взять готовый словарь из Redis
+    context = cache.get(cache_key)
+
+    # 3. Если кэша нет (или его удалили) — считаем заново
+    if not context:
+        context = analytics_dashboard(today, year, month)
+
+        # Кэшируем текущий месяц на 24 часа, а прошлые месяцы — на 30 дней.
+        # (Нам не страшно ставить большое время, ведь мы будем удалять кэш при изменениях!)
+        if year < today.year or (year == today.year and month < today.month):
+            timeout = 60 * 60 * 24 * 30  # 30 дней
+        else:
+            timeout = 60 * 60 * 24  # 24 часа
+
+        # Кладем в Redis
+        cache.set(cache_key, context, timeout)
 
     return render(request, "checklists/admin_analytics.html", context)
 

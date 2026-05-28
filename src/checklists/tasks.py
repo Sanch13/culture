@@ -3,6 +3,7 @@ from email.message import EmailMessage
 from datetime import datetime, timedelta
 
 from django.utils import timezone
+from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
@@ -314,6 +315,21 @@ def task_calculate_score(self, inspection_id):
         score = calculate_inspection_score(inspection)
         # 2. Обновляем сводку участка
         calculate_daily_location_scores(inspection.date_check)
+
+        # =======================================================
+        # 3. ИНВАЛИДАЦИЯ КЭША (РЕШЕНИЕ ТВОЕЙ ПРОБЛЕМЫ)
+        # Узнаем год и месяц отчета, который мы только что пересчитали
+        year = inspection.date_check.year
+        month = inspection.date_check.month
+
+        # Формируем точно такой же ключ, как во вьюхе
+        cache_key = f"analytics_{year}_{month:02d}"
+
+        # Удаляем его из Redis!
+        cache.delete(cache_key)
+
+        log.info("analytics_cache_invalidated", cache_key=cache_key)
+        # =======================================================
 
         duration = time.perf_counter() - start_perf
         log.info("score_calculation_finished", score=score, duration=round(duration, 4))

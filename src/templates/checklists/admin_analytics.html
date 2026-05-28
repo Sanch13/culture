@@ -4,77 +4,98 @@
 
 {% block extra_css %}
 <style>
-    /* 1. Закрепление первого столбца при горизонтальном скролле */
-    .table-responsive {
-        max-height: 80vh; /* Ограничиваем высоту, чтобы шапка тоже липла */
-        overflow: auto;
-    }
-    .table thead th {
-        position: sticky;
-        top: 0;
-        background-color: #f8f9fa;
-        z-index: 2;
-    }
-    .table tbody th, .table tbody td.sticky-col {
-        position: sticky;
-        left: 0;
-        background-color: #fff;
-        z-index: 1;
-        /* Тень для визуального отрыва от скроллящегося контента */
-        box-shadow: inset -2px 0 5px -2px rgba(0,0,0,0.1);
-    }
-    /* Угловая ячейка (Шапка первого столбца) */
-    .table thead th.sticky-col {
-        z-index: 3;
-        left: 0;
-    }
+    /* ... (Твои обычные стили для экрана оставляем без изменений) ... */
+    .table-responsive { max-height: 80vh; overflow: auto; }
+    .table thead th { position: sticky; top: 0; background-color: #f8f9fa; z-index: 2; }
+    .table tbody th, .table tbody td.sticky-col { position: sticky; left: 0; background-color: #fff; z-index: 1; box-shadow: inset -2px 0 5px -2px rgba(0,0,0,0.1); }
+    .table thead th.sticky-col { z-index: 3; left: 0; }
+    .sub-row { padding-left: 2rem !important; color: #6c757d; }
+    .table-compact th, .table-compact td { padding: 0.3rem 0.2rem; font-size: 0.85rem; }
+    .title-col { min-width: 150px; max-width: 200px; white-space: normal; word-wrap: break-word; line-height: 1.2; }
+    .day-col { min-width: 35px; width: 38px; text-align: center; }
+    .score-bad { color: #dc3545 !important; font-weight: bold !important; }
+    .score-warning { color: #fd7e14 !important; font-weight: bold !important; }
+    .score-good { color: #198754 !important; font-weight: bold !important; }
 
-    /* Отступ для подчиненных строк (Отчетов) */
-    .sub-row {
-        padding-left: 2rem !important;
-        color: #6c757d;
-    }
+    /* ==================================================== */
+    /* СТИЛИ ТОЛЬКО ДЛЯ ПЕЧАТИ (СРАБАТЫВАЮТ ПРИ CTRL+P)     */
+    /* ==================================================== */
+    @media print {
+        @page {
+            size: A4 landscape;
+            margin: 5mm;
+        }
 
-    .table-compact th, .table-compact td {
-        padding: 0.3rem 0.2rem; /* Уменьшаем отступы внутри ячеек */
-        font-size: 0.85rem; /* Чуть уменьшаем шрифт */
-    }
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
 
-    /* Колонка названия (Разрешаем перенос строк) */
-    .title-col {
-        min-width: 150px; /* Минимальная ширина, чтобы не сжалось в 1 букву */
-        max-width: 200px; /* Максимальная ширина, после которой текст будет переноситься */
-        white-space: normal; /* Разрешаем перенос строк! */
-        word-wrap: break-word;
-        line-height: 1.2;
-    }
+        .sidebar, .navbar, .card-header, form, .d-print-none {
+            display: none !important;
+        }
 
-    /* Колонки дней (Делаем максимально узкими) */
-    .day-col {
-        min-width: 35px; /* Ширина ровно под "5.8" */
-        width: 38px;
-        text-align: center;
-    }
+        /* ИСПРАВЛЕНИЕ 1: Снимаем ограничения ширины с обычного .container */
+        body, main, .container, .container-fluid, .content {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
 
-    .score-bad {
-        color: #dc3545 !important;
-        font-weight: bold !important;
-    }
-    .score-warning {
-        color: #fd7e14 !important;
-        font-weight: bold !important;
-    }
-    .score-good {
-        color: #198754 !important;
-        font-weight: bold !important;
-    }
+        .table-responsive {
+            overflow-x: visible !important;
+            max-height: none !important; /* Убираем скролл по высоте */
+        }
 
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        /* ИСПРАВЛЕНИЕ 2: Отключаем sticky для корректной печати многостраничных таблиц */
+        .table thead th, .table tbody th, .table tbody td.sticky-col, .table thead th.sticky-col {
+            position: static !important;
+            box-shadow: none !important;
+        }
+
+        table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            font-size: 9px !important;
+        }
+
+        th.title-col, td.title-col {
+            width: 22% !important; /* Чуть уменьшили для большей свободы дням */
+            font-size: 10px !important;
+        }
+
+        th.day-col, td.day-col {
+            padding: 2px 1px !important;
+            text-align: center;
+        }
+
+        tr {
+            page-break-inside: avoid !important;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+
+<!-- ЗАГОЛОВОК ТОЛЬКО ДЛЯ ПЕЧАТИ (Виден на листе А4) -->
+<div class="d-none d-print-block mb-3 text-center">
+    <h2>Сводный отчет по участкам за {{ current_month_name }} {{ current_year }} года</h2>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
     <h1>📈 Сводный отчет ({{ current_year }})</h1>
+
+    <!-- НОВАЯ КНОПКА ПЕЧАТИ -->
+    <button onclick="window.print()" class="btn btn-outline-secondary fw-bold shadow-sm">
+        <i class="bi bi-printer"></i> Печать (А4)
+    </button>
 
     <!-- Фильтр по месяцам -->
     <form method="get" class="d-flex gap-2">
@@ -109,6 +130,7 @@
             {% endfor %}
 
             <th class="bg-opacity-10" style="width: 60px;">Итог</th>
+            <th class="bg-opacity-10" style="width: 60px;">{{ prev_month_name }}</th>
         </tr>
     </thead>
     <tbody class="text-center">
@@ -149,6 +171,22 @@
             ">
                 {% if row.avg_month != None %}
                     {{ row.avg_month|floatformat:1 }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+
+            <!-- Среднее за предыдущий месяц -->
+            <td class="bg-opacity-10 fw-bold text-muted
+                {% if row.prev_month_avg != None %}
+                    {% if row.prev_month_avg <= 4.0 %}score-bad
+                    {% elif row.prev_month_avg <= 5.0 %}score-warning
+                    {% else %}score-good
+                    {% endif %}
+                {% endif %}
+            ">
+                {% if row.prev_month_avg != None %}
+                    {{ row.prev_month_avg|floatformat:1 }}
                 {% else %}
                     -
                 {% endif %}
