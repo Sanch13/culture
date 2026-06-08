@@ -5,11 +5,14 @@ import smtplib
 from email.message import Message
 
 from django.conf import settings
+from django.db.models import Avg
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
 import pyvips
 import phonenumbers
 import structlog
+
+from checklists.models import LocationDailyScore, Inspection, InspectionSectionScore
 
 logger = structlog.get_logger(__name__)
 
@@ -155,3 +158,64 @@ def compress_image(image_file, quality=80, max_width=1280):
             error_message=str(e),
         )
         raise Exception(f"Непредвиденная ошибка при сжатии: {str(e)}")
+
+
+def get_previous_month_averages(year, month):
+    """
+    Высчитывает средние баллы за предыдущий месяц для:
+    1. Участков (loc_avg_map)
+    2. Шаблонов (tmpl_avg_map)
+    3. Глобального B1 (b1_prev_avg)
+    """
+    # Определяем предыдущий месяц и год
+    if month == 1:
+        prev_month = 12
+        prev_year = year - 1
+    else:
+        prev_month = month - 1
+        prev_year = year
+
+    # 1. Участки (LocationDailyScore)
+    loc_qs = LocationDailyScore.objects.filter(
+        date__year=prev_year, date__month=prev_month
+    )
+    loc_avg_map = {
+        item["location_id"]: round(item["avg"], 2)
+        for item in loc_qs.values("location_id").annotate(avg=Avg("score"))
+        if item["avg"] is not None
+    }
+
+    # 2. Шаблоны (Inspection)
+    tmpl_qs = Inspection.objects.filter(
+        date_check__year=prev_year, date_check__month=prev_month, is_completed=True
+    )
+    tmpl_avg_map = {
+        item["template_id"]: round(item["avg"], 2)
+        for item in tmpl_qs.values("template_id").annotate(avg=Avg("final_score"))
+        if item["avg"] is not None
+    }
+
+    # 3. Глобальный B1 (тут нужна твоя специфика с минимальным баллом <= 3.01)
+    b1_scores = InspectionSectionScore.objects.filter(
+        date_check__year=prev_year, date_check__month=prev_month, section_type="B1"
+    )
+    b1_day_map = {}
+    for b1 in b1_scores:
+        if b1.date_check not in b1_day_map:
+            b1_day_map[b1.date_check] = []
+        if b1.score is not None:
+            b1_day_map[b1.date_check].append(b1.score)
+
+    b1_daily_results = []
+    for day, scores in b1_day_map.items():
+        if scores:
+            if min(scores) <= 3.01:
+                b1_daily_results.append(min(scores))
+            else:
+                b1_daily_results.append(sum(scores) / len(scores))
+
+    b1_prev_avg = None
+    if b1_daily_results:
+        b1_prev_avg = round(sum(b1_daily_results) / len(b1_daily_results), 2)
+
+    return loc_avg_map, tmpl_avg_map, b1_prev_avg

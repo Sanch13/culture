@@ -116,6 +116,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 #     'http://localhost:8000',
 # ]
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": settings.REDIS_CACHE_URL,
+    }
+}
+
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
 EMAIL_HOST = settings.EMAIL_HOST

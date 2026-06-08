@@ -26,7 +26,7 @@ from checklists.models import (
     ScheduleGeneratorState,
     InspectorRouteStat,
 )
-from checklists.utils import format_phone_number
+from checklists.utils import format_phone_number, get_previous_month_averages
 
 User = get_user_model()
 logger = structlog.get_logger(__name__)
@@ -1278,6 +1278,8 @@ def analytics_dashboard(today, year, month):
 
     _, num_days = calendar.monthrange(year, month)
 
+    loc_prev_map, tmpl_prev_map, b1_prev_avg = get_previous_month_averages(year, month)
+
     work_days = []
     for day in range(1, num_days + 1):
         current_date = datetime.date(year, month, day)
@@ -1341,6 +1343,7 @@ def analytics_dashboard(today, year, month):
             "title": loc.name,
             "scores": [],
             "avg_month": None,
+            "prev_month_avg": loc_prev_map.get(loc.id),
         }
         loc_sum = 0
         loc_count = 0
@@ -1362,6 +1365,7 @@ def analytics_dashboard(today, year, month):
                 "title": tmpl.name,
                 "scores": [],
                 "avg_month": None,
+                "prev_month_avg": tmpl_prev_map.get(tmpl.id),
             }
             tmpl_sum = 0
             tmpl_count = 0
@@ -1381,6 +1385,7 @@ def analytics_dashboard(today, year, month):
         "title": "Состояние оборудования на участках (B1)",
         "scores": [],
         "avg_month": None,
+        "prev_month_avg": b1_prev_avg,
     }
     b1_sum = 0
     b1_count = 0
@@ -1410,13 +1415,22 @@ def analytics_dashboard(today, year, month):
         (12, "Декабрь"),
     ]
 
+    # --- ДОБАВЛЯЕМ ЛОГИКУ ДЛЯ НАЗВАНИЯ ПРОШЛОГО МЕСЯЦА ---
+    # Если текущий месяц - Январь (1), то прошлый - Декабрь (12)
+    prev_month_num = 12 if month == 1 else month - 1
+    # Ищем название в списке месяцев (отнимаем 1, так как индексы списка с 0)
+    prev_month_name = months_choices[prev_month_num - 1][1]
+    current_month_name = months_choices[month - 1][1]
+
     context = {
         "table_rows": table_rows,
         "work_days": work_days,
         "current_year": year,
         "current_month": month,
         "months_choices": months_choices,
-        "years_choices": years_choices,  # Передаем года
+        "years_choices": years_choices,
+        "prev_month_name": prev_month_name,
+        "current_month_name": current_month_name,
     }
 
     return context
