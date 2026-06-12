@@ -126,6 +126,23 @@
                                                 {{ cell.inspector.last_name }} {{ cell.inspector.first_name|slice:":1" }}.
                                             </div>
 
+                                            <!-- ========================================== -->
+                                            <!-- НОВЫЙ БЛОК: ИНДИКАТОР ОТПУСКА              -->
+                                            <!-- ========================================== -->
+                                            {% if cell.inspector.vacation_start and cell.inspector.vacation_end %}
+                                                {% if cell.date >= cell.inspector.vacation_start and cell.date <= cell.inspector.vacation_end %}
+                                                    <!-- Если смена выпадает на отпуск, рисуем красную плашку -->
+                                                    <div class="mt-1">
+                                                        <span class="badge bg-danger text-wrap lh-sm shadow-sm" style="font-size: 0.7rem;"
+                                                              title="Сотрудник находится в отпуске в этот день!">
+                                                            Отпуск
+                                                            {{ cell.inspector.vacation_start|date:"d.m" }} - {{ cell.inspector.vacation_end|date:"d.m" }}
+                                                        </span>
+                                                    </div>
+                                                {% endif %}
+                                            {% endif %}
+                                            <!-- ========================================== -->
+
                                             <!-- Статус с прогрессом -->
                                             <div class="mt-1">
                                                 {% if cell.is_fully_completed %}
