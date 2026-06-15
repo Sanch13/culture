@@ -40,8 +40,13 @@ logger = structlog.get_logger(__name__)
 # --- ЗОНА СОТРУДНИКА (Строгий режим) ---
 @employee_required
 def employee_dashboard(request):
+    log = logger.bind(
+        view="employee_dashboard",
+        requestor_id=request.user.id,
+    )
     user = request.user
-    today = timezone.now().date()
+    now = timezone.now()
+    today = now.date()
     current_weekday = today.weekday()
 
     # Праздники (если используешь)
@@ -52,9 +57,14 @@ def employee_dashboard(request):
     days_until_sunday = 6 - current_weekday
     end_of_week = today + timedelta(days=days_until_sunday)
 
-    # НОВОВВЕДЕНИЕ: Если сегодня Пт, Сб или Вс -> расширяем горизонт на +7 дней (следующая неделя)
+    # Логика: Показывать следующую неделю, если:
+    # А) Сегодня Суббота (5) или Воскресенье (6)
+    # Б) Сегодня Пятница (4) И время строго больше или равно 11:20
     search_end_date = end_of_week
-    if current_weekday >= 4:  # 4 это Пятница
+    if current_weekday >= 5 or (
+        current_weekday == 4
+        and (now.hour > 11 or (now.hour == 11 and now.minute >= 20))
+    ):
         search_end_date = end_of_week + timedelta(days=7)
 
     # 2. Ищем ВСЕ задания в рамках вычисленного окна
@@ -62,6 +72,12 @@ def employee_dashboard(request):
         Schedule.objects.filter(inspector=user, date__range=[today, search_end_date])
         .select_related("template", "inspection")
         .order_by("date")
+    )
+    log.info(
+        "Tasks:",
+        schedule=upcoming_schedule,
+        today=today,
+        search_end_date=search_end_date,
     )
 
     # 3. Разделяем логику: "Сегодня" vs "Будущее"
