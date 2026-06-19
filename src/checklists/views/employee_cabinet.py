@@ -45,7 +45,10 @@ def employee_dashboard(request):
         requestor_id=request.user.id,
     )
     user = request.user
-    now = timezone.now()
+
+    # 1. Получаем текущее время (Оно всегда в UTC)
+    now_utc = timezone.now()
+    now = timezone.localtime(now_utc)
     today = now.date()
     current_weekday = today.weekday()
 
@@ -77,6 +80,7 @@ def employee_dashboard(request):
         "Tasks:",
         schedule=upcoming_schedule,
         today=today,
+        now=now,
         search_end_date=search_end_date,
     )
 
