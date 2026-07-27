@@ -40,6 +40,9 @@ class User(AbstractUser):
         help_text="Отметьте, если этот сотрудник должен участвовать в расписании.",
     )
 
+    vacation_start = models.DateField("Начало отпуска", null=True, blank=True)
+    vacation_end = models.DateField("Конец отпуска", null=True, blank=True)
+
     ROLE_WORKER = "worker"
     ROLE_MANAGER = "manager"
     ROLE_DEPUTY = "deputy"

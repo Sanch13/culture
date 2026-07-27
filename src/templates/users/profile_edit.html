@@ -1,4 +1,4 @@
-{% extends 'base_user.html' %} <!-- Или твой базовый шаблон кабинета -->
+{% extends 'base_user.html' %}
 
 {% block title %}Мой профиль{% endblock %}
 
@@ -58,6 +58,37 @@
                         {% if form.phone.errors %}
                             <div class="text-danger small">{{ form.phone.errors }}</div>
                         {% endif %}
+                    </div>
+
+                    <hr class="my-4 text-muted">
+
+                    <!-- БЛОК ОТПУСКА -->
+                    <h5 class="mb-3 text-secondary">Планирование отпуска</h5>
+                    <div class="row g-3 mb-4">
+
+                        <!-- Отпуск С -->
+                        <div class="col-md-6">
+                            <label for="{{ form.vacation_start.id_for_label }}" class="form-label text-muted small fw-bold">Начало (С):</label>
+                            {{ form.vacation_start }}
+                            {% if form.vacation_start.errors %}
+                                <div class="text-danger small mt-1">{{ form.vacation_start.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Отпуск По -->
+                        <div class="col-md-6">
+                            <label for="{{ form.vacation_end.id_for_label }}" class="form-label text-muted small fw-bold">Окончание (По):</label>
+                            {{ form.vacation_end }}
+                            {% if form.vacation_end.errors %}
+                                <div class="text-danger small mt-1">{{ form.vacation_end.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12 mt-1">
+                            <div class="form-text">
+                                Укажите даты отпуска (максимум 30 дней).
+                            </div>
+                        </div>
                     </div>
 
                     <div class="d-grid gap-2">

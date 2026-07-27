@@ -7,6 +7,19 @@ User = get_user_model()
 
 
 @pytest.fixture
+def valid_form_data():
+    """Базовый набор корректных данных без отпуска"""
+    return {
+        "first_name": "Иван",
+        "last_name": "Иванов",
+        "middle_name": "Иванович",
+        "phone": "375291234567",
+        "vacation_start": "",
+        "vacation_end": "",
+    }
+
+
+@pytest.fixture
 def inspectors(db):
     """Создает 5 инспекторов с ID от 1 до 5"""
     users = []

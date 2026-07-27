@@ -125,7 +125,14 @@ class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User
         # Разрешаем менять только эти поля
-        fields = ["first_name", "last_name", "middle_name", "phone"]
+        fields = [
+            "first_name",
+            "last_name",
+            "middle_name",
+            "phone",
+            "vacation_start",
+            "vacation_end",
+        ]
 
         widgets = {
             "first_name": forms.TextInput(
@@ -139,6 +146,12 @@ class UserProfileForm(forms.ModelForm):
             ),
             "phone": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Например: 375291234567"}
+            ),
+            "vacation_start": forms.DateInput(
+                format="%Y-%m-%d", attrs={"type": "date", "class": "form-control"}
+            ),
+            "vacation_end": forms.DateInput(
+                format="%Y-%m-%d", attrs={"type": "date", "class": "form-control"}
             ),
         }
         labels = {
@@ -159,3 +172,36 @@ class UserProfileForm(forms.ModelForm):
         # Можно тут вызвать наш format_phone_number, чтобы сохранять в едином формате,
         # но пока оставим как есть, пусть валидатор модели работает.
         return phone
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get("vacation_start")
+        end = cleaned_data.get("vacation_end")
+
+        if start or end:
+            # Валидация 1: Указана только одна дата
+            if not start:
+                # Ошибка появится прямо под полем "Начало (С):"
+                self.add_error("vacation_start", "Укажите начало отпуска.")
+            if not end:
+                # Ошибка появится прямо под полем "Окончание (По):"
+                self.add_error("vacation_end", "Укажите конец отпуска.")
+
+            # Если обе даты заполнены, проверяем логику
+            if start and end:
+                # Валидация 2: Дата конца раньше даты начала
+                if start > end:
+                    self.add_error(
+                        "vacation_end",
+                        "Дата окончания не может быть раньше даты начала.",
+                    )
+
+                # Валидация 3: Максимальное количество дней (30)
+                days_count = (end - start).days + 1
+                if days_count > 30:
+                    self.add_error(
+                        "vacation_end",
+                        f"Отпуск не может превышать 30 дней. Вы выбрали {days_count} дн.",
+                    )
+
+        return cleaned_data
