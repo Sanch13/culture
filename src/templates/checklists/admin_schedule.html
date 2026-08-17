@@ -165,6 +165,7 @@
                                                         data-name="{{ cell.inspector.get_full_name }}"
                                                         data-human-date="{{ cell.date|date:'d.m.Y' }}"
                                                         data-iso-date="{{ cell.date|date:'Y-m-d' }}"
+                                                        data-schedule-id="{{ cell.first_schedule_id }}"
 
                                                         onclick="openExchangeModal(this)">
                                                     <i class="bi bi-arrow-left-right"></i>
@@ -268,6 +269,7 @@
                     <!-- Скрытое поле: ID смены, КОТОРУЮ меняем -->
                     <input type="hidden" name="source_date" id="exchSourceDate">
                     <input type="hidden" name="source_inspector_id" id="exchSourceInspectorId">
+                    <input type="hidden" name="source_schedule_id" id="exchSourceScheduleId">
 
                     <!-- Инфо-блок: Кто меняется -->
                     <div class="alert alert-light border text-center mb-3">
@@ -396,6 +398,7 @@
         const name = button.getAttribute('data-name');
         const humanDate = button.getAttribute('data-human-date');
         const isoDate = button.getAttribute('data-iso-date'); // YYYY-MM-DD
+        const scheduleId = button.getAttribute('data-schedule-id');
 
         // --- ПРОВЕРКА ОТЛАДКИ ---
         console.log("Дата для API:", isoDate);
@@ -409,6 +412,7 @@
         document.getElementById('exchSourceInspectorId').value = inspectorId;
         document.getElementById('exchOldName').textContent = name;
         document.getElementById('exchDate').textContent = humanDate;
+        document.getElementById('exchSourceScheduleId').value = scheduleId;
 
         // 3. Подготовка к запросу API
         const select = document.getElementById('targetSwapSelect');

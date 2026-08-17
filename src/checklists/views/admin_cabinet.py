@@ -305,22 +305,32 @@ def admin_weekly_schedule(request):
 def admin_exchange_shifts(request):
     is_silent = request.POST.get("is_silent") == "true"
 
+    # 1. Получаем ID конкретной смены, на которую кликнули
+    source_schedule_id = request.POST.get("source_schedule_id")
+
     log = logger.bind(
         requestor_id=request.user.id,
-        source_date=request.POST.get("source_date"),
-        source_inspector_id=request.POST.get("source_inspector_id"),
+        source_schedule_id=source_schedule_id,
         is_silent=is_silent,
     )
-
     log.info("swap_request_received - Старт замены проверяющих")
-    # 1. Получаем данные ИСХОДНОЙ смены (кто отдает)
-    source_date_str = request.POST.get("source_date")
-    source_inspector_id = request.POST.get("source_inspector_id")
 
-    # 2. Получаем данные ЦЕЛЕВОЙ смены (кто принимает)
+    # 2. Получаем ИСХОДНУЮ смену и вычисляем её маршрут
+    source_schedule = get_object_or_404(Schedule, id=source_schedule_id)
+    source_date_str = str(source_schedule.date)
+    source_user = source_schedule.inspector
+
+    source_route = source_schedule.template.routes.first()
+    if not source_route:
+        messages.error(
+            request, "Ошибка: Шаблон смены не привязан ни к одному маршруту."
+        )
+        return redirect("admin_schedule")
+
+    # 3. Получаем ЦЕЛЕВУЮ смену (с кем меняемся)
     target_value = request.POST.get("target_schedule_id")  # "2025-12-15|5"
 
-    if not all([source_date_str, source_inspector_id, target_value]):
+    if not target_value:
         messages.error(request, "Неполные данные для обмена.")
         return redirect("admin_schedule")
 
@@ -330,12 +340,26 @@ def admin_exchange_shifts(request):
         messages.error(request, "Ошибка формата целевой смены.")
         return redirect("admin_schedule")
 
-    # 3. ИЩЕМ ЗАДАЧИ
+    # 4. ИЩЕМ ЗАДАЧИ
+    route_templates = source_route.templates.all()
+
+    # ИСХОДНЫЕ ЗАДАЧИ (Кто отдает): Строго задачи того маршрута, на который кликнул админ
     source_tasks = list(
-        Schedule.objects.filter(date=source_date_str, inspector_id=source_inspector_id)
+        Schedule.objects.filter(
+            date=source_date_str,
+            inspector=source_user,
+            template__in=route_templates,  # <--- ФИЛЬТР ОСТАВЛЯЕМ ТОЛЬКО ЗДЕСЬ
+        )
     )
+
+    # ЦЕЛЕВЫЕ ЗАДАЧИ (Кто принимает): Забираем ВСЕ задачи кандидата на этот день,
+    # независимо от того, на каких маршрутах он должен был работать!
     target_tasks = list(
-        Schedule.objects.filter(date=target_date_str, inspector_id=target_inspector_id)
+        Schedule.objects.filter(
+            date=target_date_str,
+            inspector_id=target_inspector_id,
+            # <--- УБРАЛИ ФИЛЬТР ПО МАРШРУТУ ЗДЕСЬ!
+        )
     )
 
     if not source_tasks or not target_tasks:
@@ -345,32 +369,34 @@ def admin_exchange_shifts(request):
         )
         return redirect("admin_schedule")
 
+    target_user = target_tasks[0].inspector
+
     try:
-        # 4. СОВЕРШАЕМ ОБМЕН (Batch Swap)
+        # 5. СОВЕРШАЕМ ОБМЕН (Cross-Route Swap)
         with transaction.atomic():
-            # Получаем объекты пользователей для логов и уведомлений
-            source_user = source_tasks[0].inspector
-            target_user = target_tasks[0].inspector
             log.info(
                 "swap_processing - Процесс смены проверяющих",
+                source_route=source_route.title,
                 source_tasks_count=len(source_tasks),
                 target_tasks_count=len(target_tasks),
             )
 
-            # Меняем Исходных (отдаем целевому)
+            # Исходные задачи (Сборка) отдаем Целевому юзеру
             for t in source_tasks:
                 t.inspector = target_user
-                t.is_swapped = False  # Целевой теперь работает сегодня
+                t.is_swapped = (
+                    False  # Целевой теперь работает сегодня, может отказаться
+                )
                 t.save()
 
-            # Меняем Целевых (отдаем исходному)
+            # Целевые задачи (например, ЭМО из будущего) отдаем Исходному юзеру
             for t in target_tasks:
                 t.inspector = source_user
                 t.is_swapped = True  # Исходный уехал в будущее, его больше не трогать
                 t.save()
 
             # Формируем причину для лога БД
-            reason_text = f"Обмен сменами {source_user.last_name} {source_user.first_name} ({source_date_str}) <-> {target_user.last_name} {target_user.first_name} ({target_date_str})"
+            reason_text = f"Обмен сменами: {source_user.last_name} {source_user.first_name} (с маршрута «{source_route.title}» за {source_date_str}) <-> {target_user.last_name} {target_user.first_name} (за {target_date_str})"
             if is_silent:
                 reason_text += " [Тихая замена]"
 
@@ -383,26 +409,18 @@ def admin_exchange_shifts(request):
                 reason=reason_text,
             )
 
-            # 5. ЛОГИКА УВЕДОМЛЕНИЙ (Проверяем флаг)
+            # 6. ЛОГИКА УВЕДОМЛЕНИЙ
             if not is_silent:
                 notify_user_about_swap.delay(source_date_str, target_user.id)
-                # source_user теперь назначен на target_date
                 notify_user_about_swap.delay(target_date_str, source_user.id)
-                log.info(
-                    "swap_notification_queued - Поставил в очередь уведомить проверяющего",
-                    recipient_id=target_user.id,
-                )
+                log.info("swap_notification_queued")
             else:
-                log.info(
-                    "swap_notification_skipped - Тихая замена, отправка email отменена",
-                    recipient_id=target_user.id,
-                )
+                log.info("swap_notification_skipped")
 
         messages.success(
             request,
-            f"Успешный обмен: {target_user.last_name} выходит {source_date_str}, а {source_user.last_name} — {target_date_str}.",
+            f"Успешный обмен: {target_user.last_name} выходит {source_date_str} на «{source_route.title}», а {source_user.last_name} — {target_date_str} на смену {target_user.last_name}.",
         )
-        log.info("swap_successful - Успешный обмен проверками")
     except Exception as e:
         log.error("swap_failed - Ошибка при обмене", error=str(e), exc_info=True)
         messages.error(request, "Ошибка при обмене")

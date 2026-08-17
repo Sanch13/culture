@@ -294,36 +294,28 @@ def api_cascade_shift(request, schedule_id):
     is_silent_str = request.POST.get("is_silent", "true")
     is_silent = is_silent_str.lower() == "true"
 
+    # Получаем конкретную запись расписания, на которую кликнул админ
+    schedule_item = get_object_or_404(Schedule, id=schedule_id)
+
     log = logger.bind(
         service="api_cascade_shift", schedule_id=schedule_id, is_silent=is_silent
     )
-    # Находим задачу, по которой кликнул Админ
-    schedule_item = get_object_or_404(Schedule, id=schedule_id)
 
-    log.info("[API] Удаление проверяющего из расписания", schedule_item=schedule_item)
-
-    # Запрещаем трогать прошлое
     if schedule_item.date < timezone.now().date():
         return JsonResponse(
             {"status": "error", "message": "Нельзя изменить прошлые дни."}
         )
 
-    # Запрещаем трогать начатое
     if schedule_item.inspection:
         return JsonResponse({"status": "error", "message": "Отчет уже начат."})
 
-    target_date = schedule_item.date
-    user_to_remove = schedule_item.inspector
-
-    # Вызываем магию
+    # ИЗМЕНЕНИЕ: Передаем ВЕСЬ объект schedule_item, а не только дату
     success, message = cascade_shift_schedule(
-        target_date=target_date,
-        user_to_remove=user_to_remove,
-        requestor=request.user,
-        is_silent=is_silent,
+        target_schedule=schedule_item, requestor=request.user, is_silent=is_silent
     )
 
     if success:
+        log.info("success api_cascade_shift")
         return JsonResponse({"status": "ok", "message": message})
     else:
         return JsonResponse({"status": "error", "message": message})
